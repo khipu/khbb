@@ -75,7 +75,7 @@ func NewCmdList(f *cmdutil.Factory, runF func(*ListOptions) error) *cobra.Comman
 	fl.StringVar(&opts.Reviewer, "reviewer", "", "Filter by reviewer: @me, a {uuid}, an account ID or a nickname")
 	fl.StringVarP(&opts.Base, "base", "B", "", "Filter by destination `branch`")
 	fl.StringVarP(&opts.Head, "head", "H", "", "Filter by source `branch`")
-	fl.StringVar(&opts.Query, "query", "", "Extra BBQL `expression`, combined with the other filters using AND")
+	fl.StringVar(&opts.Query, "query", "", "Extra BBQL `expression`, combined with the other filters using AND (to filter on state inside it, also pass --state all)")
 	fl.IntVarP(&opts.Limit, "limit", "L", 30, "Maximum number of pull requests to fetch")
 	cmdutil.AddJSONFlags(cmd, &opts.Exporter, shared.PullRequestFields)
 	return cmd

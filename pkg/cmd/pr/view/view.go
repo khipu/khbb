@@ -52,6 +52,9 @@ func NewCmdView(f *cmdutil.Factory, runF func(*ViewOptions) error) *cobra.Comman
   $ khbb pr view 42 --json title,state,reviewers,comments`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := shared.CheckRepoSelector(cmd, args); err != nil {
+				return err
+			}
 			if len(args) > 0 {
 				opts.Selector = args[0]
 			}
@@ -94,9 +97,12 @@ func viewRun(ctx context.Context, opts *ViewOptions) error {
 		if err != nil {
 			return err
 		}
-		comments = make([]shared.Comment, len(raws))
+		comments = make([]shared.Comment, 0, len(raws))
 		for i := range raws {
-			comments[i] = shared.NewComment(&raws[i])
+			if raws[i].Pending {
+				continue // unpublished drafts are never shown
+			}
+			comments = append(comments, shared.NewComment(&raws[i]))
 		}
 	}
 	if opts.Exporter != nil {

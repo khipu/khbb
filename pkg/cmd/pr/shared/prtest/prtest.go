@@ -60,7 +60,8 @@ const PR7 = `{"id":7,"title":"Fix gears","description":"","state":"MERGED","draf
 	`,"created_on":"2026-09-20T10:00:00.000000+00:00","updated_on":"2026-09-21T10:00:00.000000+00:00"` +
 	`,"links":{"html":{"href":"https://bitbucket.org/acme/widgets/pull-requests/7"}}}`
 
-// CommentInline is bob's comment on src/widget.go line 12 of PR 42; CommentReply is ada's reply to it.
+// CommentInline is bob's comment on src/widget.go line 12 of PR 42; CommentReply is ada's reply to
+// it; CommentPending is bob's unpublished draft comment, which never appears in output.
 const (
 	CommentInline = `{"id":101,"content":{"raw":"Please rename this."},"user":` + Bob +
 		`,"inline":{"path":"src/widget.go","from":null,"to":12},"deleted":false` +
@@ -69,6 +70,10 @@ const (
 	CommentReply = `{"id":102,"content":{"raw":"Done."},"user":` + Ada + `,"parent":{"id":101},"deleted":false` +
 		`,"created_on":"2026-10-01T14:00:00.000000+00:00","updated_on":"2026-10-01T14:00:00.000000+00:00"` +
 		`,"links":{"html":{"href":"https://bitbucket.org/acme/widgets/pull-requests/42/_/diff#comment-102"}}}`
+	CommentPending = `{"id":103,"content":{"raw":"Draft thought, not published yet."},"user":` + Bob +
+		`,"pending":true,"deleted":false` +
+		`,"created_on":"2026-10-01T15:00:00.000000+00:00","updated_on":"2026-10-01T15:00:00.000000+00:00"` +
+		`,"links":{"html":{"href":"https://bitbucket.org/acme/widgets/pull-requests/42/_/diff#comment-103"}}}`
 )
 
 // Status returns a commit status whose key and name are key and whose Bitbucket state is state.

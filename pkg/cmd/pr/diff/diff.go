@@ -40,6 +40,9 @@ func NewCmdDiff(f *cmdutil.Factory, runF func(*DiffOptions) error) *cobra.Comman
   $ khbb pr diff 42 --patch > changes.patch`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := shared.CheckRepoSelector(cmd, args); err != nil {
+				return err
+			}
 			if len(args) > 0 {
 				opts.Selector = args[0]
 			}

@@ -39,6 +39,38 @@ func TestView_RawOutputWithComments(t *testing.T) {
 	}
 }
 
+func TestView_HidesPendingComments(t *testing.T) {
+	reg := httpmock.New(t)
+	reg.Register("GET", prtest.PRs+"/42", httpmock.JSONResponse(200, prtest.PR42))
+	reg.Register("GET", prtest.PRs+"/42/comments", httpmock.JSONResponse(200, prtest.Page(prtest.CommentInline, prtest.CommentPending)))
+	f, _, out, _ := prtest.NewFactory(reg)
+	if err := prtest.Run(NewCmdView(f, nil), "42", "--comments"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Draft thought") || strings.Contains(out.String(), "comment:\t103") {
+		t.Errorf("pending comment leaked into raw output:\n%s", out.String())
+	}
+
+	reg2 := httpmock.New(t)
+	reg2.Register("GET", prtest.PRs+"/42", httpmock.JSONResponse(200, prtest.PR42))
+	reg2.Register("GET", prtest.PRs+"/42/comments", httpmock.JSONResponse(200, prtest.Page(prtest.CommentInline, prtest.CommentPending)))
+	f2, _, out2, _ := prtest.NewFactory(reg2)
+	if err := prtest.Run(NewCmdView(f2, nil), "42", "--json", "comments"); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Comments []struct {
+			ID int `json:"id"`
+		} `json:"comments"`
+	}
+	if err := json.Unmarshal(out2.Bytes(), &got); err != nil {
+		t.Fatalf("%v: %s", err, out2.String())
+	}
+	if len(got.Comments) != 1 || got.Comments[0].ID != 101 {
+		t.Errorf("comments = %+v, want only the published comment", got.Comments)
+	}
+}
+
 func TestView_TTY(t *testing.T) {
 	reg := httpmock.New(t)
 	reg.Register("GET", prtest.PRs+"/42", httpmock.JSONResponse(200, prtest.PR42))

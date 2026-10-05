@@ -17,8 +17,8 @@ func TestUserClause(t *testing.T) {
 	cases := []struct{ who, want string }{
 		{"@me", `author.uuid = "` + prtest.AdaUUID + `"`},
 		{prtest.BobUUID, `author.uuid = "` + prtest.BobUUID + `"`},
-		{"000000:bbbb", `author.account_id = "000000:bbbb"`},
-		{"bob", `author.nickname = "bob"`},
+		{"000000:bbbb", `(author.account_id = "000000:bbbb" OR author.nickname = "000000:bbbb")`},
+		{"bob", `(author.account_id = "bob" OR author.nickname = "bob")`},
 	}
 	for _, tc := range cases {
 		got, err := shared.UserClause(context.Background(), client, "author", tc.who)

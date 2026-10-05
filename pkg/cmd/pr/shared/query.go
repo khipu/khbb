@@ -8,7 +8,8 @@ import (
 )
 
 // UserClause turns a user filter into a BBQL clause on field ("author" or "reviewers").
-// who is @me, a {uuid}, an Atlassian account ID (it contains ':') or a nickname.
+// who is @me, a {uuid}, an account ID or a nickname. Atlassian account IDs exist without a ':',
+// so anything that is not @me or a {uuid} matches either field to avoid guessing wrong.
 func UserClause(ctx context.Context, client *bitbucket.Client, field, who string) (string, error) {
 	who = strings.TrimSpace(who)
 	switch {
@@ -20,8 +21,7 @@ func UserClause(ctx context.Context, client *bitbucket.Client, field, who string
 		return field + ".uuid = " + bitbucket.QuoteBBQL(me.UUID), nil
 	case strings.HasPrefix(who, "{") && strings.HasSuffix(who, "}"):
 		return field + ".uuid = " + bitbucket.QuoteBBQL(who), nil
-	case strings.Contains(who, ":"):
-		return field + ".account_id = " + bitbucket.QuoteBBQL(who), nil
 	}
-	return field + ".nickname = " + bitbucket.QuoteBBQL(who), nil
+	q := bitbucket.QuoteBBQL(who)
+	return "(" + field + ".account_id = " + q + " OR " + field + ".nickname = " + q + ")", nil
 }

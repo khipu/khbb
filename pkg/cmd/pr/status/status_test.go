@@ -2,6 +2,7 @@ package status
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/khipu/khbb/internal/httpmock"
@@ -41,6 +42,36 @@ func TestStatus_HumanOutput(t *testing.T) {
 		if q.Get("q") != want || q.Get("state") != "" || q.Get("fields") == "" {
 			t.Errorf("call %d query = %v", i+1, q)
 		}
+	}
+}
+
+func TestStatus_BranchWithNoOpenPullRequest(t *testing.T) {
+	reg := httpmock.New(t)
+	registerLists(reg, prtest.Page(), prtest.Page(), prtest.Page())
+	f, _, out, _ := prtest.NewFactory(reg)
+	prtest.SetBranch(f, "feature/widgets")
+
+	if err := prtest.Run(NewCmdStatus(f, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "  There is no open pull request for feature/widgets") {
+		t.Errorf("out = %q", out.String())
+	}
+}
+
+func TestStatus_ChangesRequestedExcludedFromNeedsReview(t *testing.T) {
+	reg := httpmock.New(t)
+	pr9ChangesRequested := strings.Replace(prtest.PR9, `"participants":[`,
+		`"participants":[{"user":`+prtest.Ada+`,"role":"REVIEWER","approved":false,"state":"changes_requested"},`, 1)
+	registerLists(reg, prtest.Page(), prtest.Page(), prtest.Page(pr9ChangesRequested))
+	f, _, out, _ := prtest.NewFactory(reg)
+	prtest.SetBranch(f, "feature/other")
+
+	if err := prtest.Run(NewCmdStatus(f, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "#9") {
+		t.Errorf("PR where ada has requested changes must be excluded from needsMyReview:\n%s", out.String())
 	}
 }
 

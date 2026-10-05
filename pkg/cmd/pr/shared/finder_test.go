@@ -95,6 +95,10 @@ func TestFind_NoOpenPullRequest(t *testing.T) {
 	if err == nil || err.Error() != `no open pull request found for branch "feature/widgets" in acme/widgets` {
 		t.Errorf("err = %v", err)
 	}
+	var notFound *cmdutil.NotFoundError
+	if !errors.As(err, &notFound) {
+		t.Errorf("err = %v, want *cmdutil.NotFoundError", err)
+	}
 }
 
 func TestFind_SeveralOpenPullRequests(t *testing.T) {

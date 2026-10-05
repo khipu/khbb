@@ -7,10 +7,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/internal/gitctx"
 )
+
+// CheckRepoSelector rejects --repo without a pull request argument: the current branch belongs to the local repository.
+func CheckRepoSelector(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 && cmd.Flags().Changed("repo") {
+		return cmdutil.FlagErrorf("argument required when using the --repo flag")
+	}
+	return nil
+}
 
 var prURLRE = regexp.MustCompile(`^https?://(?:www\.)?bitbucket\.org/([^/]+)/([^/]+)/pull-requests/(\d+)(?:[/?#].*)?$`)
 
@@ -82,7 +92,7 @@ func (f *Finder) idForCurrentBranch(ctx context.Context, repo gitctx.Repo) (int,
 	}
 	switch len(prs) {
 	case 0:
-		return 0, fmt.Errorf("no open pull request found for branch %q in %s", branch, repo.FullName())
+		return 0, &cmdutil.NotFoundError{Msg: fmt.Sprintf("no open pull request found for branch %q in %s", branch, repo.FullName())}
 	case 1:
 		return prs[0].ID, nil
 	}

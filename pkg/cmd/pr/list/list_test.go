@@ -11,6 +11,16 @@ import (
 	"github.com/khipu/khbb/pkg/cmd/pr/shared/prtest"
 )
 
+func TestNewCmdList_QueryHelpMentionsStateFilter(t *testing.T) {
+	reg := httpmock.New(t)
+	f, _, _, _ := prtest.NewFactory(reg)
+	fl := NewCmdList(f, nil).Flags().Lookup("query")
+	want := "Extra BBQL `expression`, combined with the other filters using AND (to filter on state inside it, also pass --state all)"
+	if fl.Usage != want {
+		t.Errorf("--query usage = %q, want %q", fl.Usage, want)
+	}
+}
+
 func TestNewCmdList_ParsesFlags(t *testing.T) {
 	reg := httpmock.New(t)
 	f, _, _, _ := prtest.NewFactory(reg)
@@ -52,7 +62,7 @@ func TestList_FiltersAndTTYTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := reg.Calls[1].URL.Query()
-	wantQ := `state = "MERGED" AND (author.uuid = "` + prtest.AdaUUID + `" AND reviewers.nickname = "bob" AND destination.branch.name = "main"` +
+	wantQ := `state = "MERGED" AND (author.uuid = "` + prtest.AdaUUID + `" AND (reviewers.account_id = "bob" OR reviewers.nickname = "bob") AND destination.branch.name = "main"` +
 		` AND source.branch.name = "feat/\"x\"" AND (title ~ "x"))`
 	if q.Get("q") != wantQ || q.Get("state") != "" || q.Get("pagelen") != "5" || q.Get("fields") != "" {
 		t.Errorf("query = %v", q)

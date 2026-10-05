@@ -22,6 +22,10 @@ type StatusOptions struct {
 	BaseRepo   func() (gitctx.Repo, error)
 	Branch     func() (string, error)
 	Exporter   cmdutil.Exporter
+
+	// RepoFlagSet is true when --repo was passed: the current branch belongs to the local
+	// repository, not the one named by --repo, so its pull request is not looked up or shown.
+	RepoFlagSet bool
 }
 
 var statusFields = []string{"currentBranch", "createdByMe", "needsMyReview"}
@@ -41,6 +45,7 @@ func NewCmdStatus(f *cmdutil.Factory, runF func(*StatusOptions) error) *cobra.Co
 		Long:  "Show the open pull request of the current branch, your open pull requests, and those waiting for your review, in the current repository.",
 		Args:  cmdutil.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.RepoFlagSet = cmd.Flags().Changed("repo")
 			if runF != nil {
 				return runF(opts)
 			}
@@ -64,16 +69,19 @@ func statusRun(ctx context.Context, opts *StatusOptions) error {
 	if err != nil {
 		return err
 	}
-	branch, branchErr := opts.Branch()
-
+	var branch string
+	var branchErr error
 	var current *shared.PullRequest
-	if branchErr == nil {
-		prs, err := openPRs(ctx, client, repo, "source.branch.name = "+bitbucket.QuoteBBQL(branch), 1)
-		if err != nil {
-			return err
-		}
-		if len(prs) > 0 {
-			current = &prs[0]
+	if !opts.RepoFlagSet {
+		branch, branchErr = opts.Branch()
+		if branchErr == nil {
+			prs, err := openPRs(ctx, client, repo, "source.branch.name = "+bitbucket.QuoteBBQL(branch), 1)
+			if err != nil {
+				return err
+			}
+			if len(prs) > 0 {
+				current = &prs[0]
+			}
 		}
 	}
 	mine, err := openPRs(ctx, client, repo, "author.uuid = "+bitbucket.QuoteBBQL(me.UUID), 30)
@@ -89,7 +97,7 @@ func statusRun(ctx context.Context, opts *StatusOptions) error {
 	if opts.Exporter != nil {
 		return opts.Exporter.Write(opts.IO, statusExport{CurrentBranch: current, CreatedByMe: mine, NeedsMyReview: toReview})
 	}
-	printStatus(opts.IO, repo, branch, branchErr, current, mine, toReview)
+	printStatus(opts.IO, repo, branch, branchErr, current, mine, toReview, opts.RepoFlagSet)
 	return nil
 }
 
@@ -116,12 +124,14 @@ func awaitingReviewFrom(pr shared.PullRequest, uuid string) bool {
 	return false
 }
 
-func printStatus(ios *iostreams.IOStreams, repo gitctx.Repo, branch string, branchErr error, current *shared.PullRequest, mine, toReview []shared.PullRequest) {
+func printStatus(ios *iostreams.IOStreams, repo gitctx.Repo, branch string, branchErr error, current *shared.PullRequest, mine, toReview []shared.PullRequest, repoFlagSet bool) {
 	w := ios.Out
 	fmt.Fprintf(w, "Relevant pull requests in %s\n\n", repo.FullName())
 
 	fmt.Fprintln(w, ios.Bold("Current branch"))
 	switch {
+	case repoFlagSet:
+		fmt.Fprintln(w, ios.Gray("  Not shown when --repo is set"))
 	case branchErr != nil:
 		fmt.Fprintln(w, ios.Gray("  Not on a branch"))
 	case current == nil:

@@ -55,6 +55,9 @@ stopped, 8 when any check is still in progress.`,
   $ khbb pr checks 42 --json name,state,url`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := shared.CheckRepoSelector(cmd, args); err != nil {
+				return err
+			}
 			if len(args) > 0 {
 				opts.Selector = args[0]
 			}
