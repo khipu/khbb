@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -112,7 +113,7 @@ type DiffStat struct {
 
 // PRListOptions filters ListPullRequests.
 type PRListOptions struct {
-	States           []string // OPEN, MERGED, DECLINED, SUPERSEDED; empty means Bitbucket's default (OPEN)
+	States           []string // OPEN, MERGED, DECLINED, SUPERSEDED. With Query they are folded into the BBQL (Bitbucket ignores state= when q is set); empty means no state filter with Query, or Bitbucket's default (OPEN) without.
 	Query            string   // BBQL expression
 	WithParticipants bool     // include reviewers and participants in each item
 }
@@ -120,11 +121,16 @@ type PRListOptions struct {
 // ListPullRequests lists a repository's pull requests (limit <= 0 means all).
 func (c *Client) ListPullRequests(ctx context.Context, workspace, slug string, opts PRListOptions, limit int) ([]PullRequest, error) {
 	q := url.Values{}
-	for _, s := range opts.States {
-		q.Add("state", s)
-	}
-	if opts.Query != "" {
+	switch {
+	case opts.Query != "" && len(opts.States) > 0:
+		// Bitbucket ignores the state parameter whenever q is present, so the states go into the BBQL.
+		q.Set("q", stateClause(opts.States)+" AND ("+opts.Query+")")
+	case opts.Query != "":
 		q.Set("q", opts.Query)
+	default:
+		for _, s := range opts.States {
+			q.Add("state", s)
+		}
 	}
 	if opts.WithParticipants {
 		q.Set("fields", "+values.participants,+values.reviewers")
@@ -134,6 +140,18 @@ func (c *Client) ListPullRequests(ctx context.Context, workspace, slug string, o
 		path += "?" + enc
 	}
 	return List[PullRequest](ctx, c, path, limit)
+}
+
+// stateClause renders states as a BBQL condition: `state = "OPEN"`, or `(state = "A" OR state = "B")`.
+func stateClause(states []string) string {
+	parts := make([]string, len(states))
+	for i, s := range states {
+		parts[i] = "state = " + QuoteBBQL(s)
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
 }
 
 // GetPullRequest returns one pull request, including reviewers and participants.

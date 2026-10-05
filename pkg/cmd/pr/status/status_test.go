@@ -32,13 +32,13 @@ func TestStatus_HumanOutput(t *testing.T) {
 		t.Errorf("out = %q\nwant %q", out.String(), want)
 	}
 	wantQueries := []string{
-		`source.branch.name = "feature/widgets"`,
-		`author.uuid = "` + prtest.AdaUUID + `"`,
-		`reviewers.uuid = "` + prtest.AdaUUID + `"`,
+		`state = "OPEN" AND (source.branch.name = "feature/widgets")`,
+		`state = "OPEN" AND (author.uuid = "` + prtest.AdaUUID + `")`,
+		`state = "OPEN" AND (reviewers.uuid = "` + prtest.AdaUUID + `")`,
 	}
 	for i, want := range wantQueries {
 		q := reg.Calls[i+1].URL.Query()
-		if q.Get("q") != want || q.Get("state") != "OPEN" || q.Get("fields") == "" {
+		if q.Get("q") != want || q.Get("state") != "" || q.Get("fields") == "" {
 			t.Errorf("call %d query = %v", i+1, q)
 		}
 	}

@@ -52,9 +52,9 @@ func TestList_FiltersAndTTYTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := reg.Calls[1].URL.Query()
-	wantQ := `author.uuid = "` + prtest.AdaUUID + `" AND reviewers.nickname = "bob" AND destination.branch.name = "main"` +
-		` AND source.branch.name = "feat/\"x\"" AND (title ~ "x")`
-	if q.Get("q") != wantQ || q.Get("state") != "MERGED" || q.Get("pagelen") != "5" || q.Get("fields") != "" {
+	wantQ := `state = "MERGED" AND (author.uuid = "` + prtest.AdaUUID + `" AND reviewers.nickname = "bob" AND destination.branch.name = "main"` +
+		` AND source.branch.name = "feat/\"x\"" AND (title ~ "x"))`
+	if q.Get("q") != wantQ || q.Get("state") != "" || q.Get("pagelen") != "5" || q.Get("fields") != "" {
 		t.Errorf("query = %v", q)
 	}
 	for _, want := range []string{"ID", "TITLE", "#42", "Add widgets", "feature/widgets → main", "ada", "2026-10-02"} {

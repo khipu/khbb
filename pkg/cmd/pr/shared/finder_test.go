@@ -83,7 +83,7 @@ func TestFind_CurrentBranchQuotesTheName(t *testing.T) {
 		t.Fatalf("pr %v err %v", pr, err)
 	}
 	q := reg.Calls[0].URL.Query()
-	if q.Get("q") != `source.branch.name = "feature/\"quoted\""` || q.Get("state") != "OPEN" {
+	if q.Get("q") != `state = "OPEN" AND (source.branch.name = "feature/\"quoted\"")` || q.Get("state") != "" {
 		t.Errorf("query = %v", q)
 	}
 }

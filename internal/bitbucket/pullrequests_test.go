@@ -36,7 +36,7 @@ func TestListPullRequests_BuildsQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := reg.Calls[0].URL.Query()
-	if !slices.Equal(q["state"], []string{"OPEN", "MERGED"}) || q.Get("q") != `author.uuid = "{x}"` ||
+	if q.Get("q") != `(state = "OPEN" OR state = "MERGED") AND (author.uuid = "{x}")` || len(q["state"]) != 0 ||
 		q.Get("fields") != "+values.participants,+values.reviewers" || q.Get("pagelen") != "30" {
 		t.Errorf("query = %v", q)
 	}
@@ -56,6 +56,38 @@ func TestListPullRequests_BuildsQuery(t *testing.T) {
 	}
 	if !pr.CreatedOn.Equal(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)) || pr.Links.HTML.Href != "https://bitbucket.org/acme/widgets/pull-requests/42" {
 		t.Errorf("created %v url %q", pr.CreatedOn, pr.Links.HTML.Href)
+	}
+}
+
+func TestListPullRequests_StatesWithoutQueryUseParams(t *testing.T) {
+	c, reg := newTestClient(t, bitbucket.Options{})
+	reg.Register("GET", prPath, httpmock.JSONResponse(200, `{"values":[]}`))
+
+	_, err := c.ListPullRequests(context.Background(), "acme", "widgets", bitbucket.PRListOptions{
+		States: []string{"OPEN", "MERGED"},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := reg.Calls[0].URL.Query()
+	if !slices.Equal(q["state"], []string{"OPEN", "MERGED"}) || q.Get("q") != "" {
+		t.Errorf("query = %v", q)
+	}
+}
+
+func TestListPullRequests_SingleStateWithQuery(t *testing.T) {
+	c, reg := newTestClient(t, bitbucket.Options{})
+	reg.Register("GET", prPath, httpmock.JSONResponse(200, `{"values":[]}`))
+
+	_, err := c.ListPullRequests(context.Background(), "acme", "widgets", bitbucket.PRListOptions{
+		States: []string{"OPEN"}, Query: `source.branch.name = "x"`,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := reg.Calls[0].URL.Query()
+	if q.Get("q") != `state = "OPEN" AND (source.branch.name = "x")` || len(q["state"]) != 0 {
+		t.Errorf("query = %v", q)
 	}
 }
 
