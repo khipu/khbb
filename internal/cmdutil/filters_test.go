@@ -13,9 +13,11 @@ func TestValidateJQ(t *testing.T) {
 			t.Errorf("ValidateJQ(%q) = %v", ok, err)
 		}
 	}
-	var flagErr *cmdutil.FlagError
-	if err := cmdutil.ValidateJQ(".["); !errors.As(err, &flagErr) {
-		t.Errorf("ValidateJQ(.[) = %v, want FlagError", err)
+	for _, bad := range []string{".[", "nosuchfn", "$undefined"} {
+		var flagErr *cmdutil.FlagError
+		if err := cmdutil.ValidateJQ(bad); !errors.As(err, &flagErr) {
+			t.Errorf("ValidateJQ(%q) = %v, want FlagError", bad, err)
+		}
 	}
 }
 

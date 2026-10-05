@@ -36,6 +36,11 @@ type AuthError struct{ Msg string }
 
 func (e *AuthError) Error() string { return e.Msg }
 
+// NotFoundError reports a missing resource detected without an HTTP 404, such as a branch with no open pull request.
+type NotFoundError struct{ Msg string }
+
+func (e *NotFoundError) Error() string { return e.Msg }
+
 // ExitError ends the command with Code without printing anything.
 type ExitError struct{ Code int }
 
@@ -54,11 +59,12 @@ type ErrorInfo struct {
 // Classify maps an error to its code, message, hint and process exit code.
 func Classify(err error) ErrorInfo {
 	var (
-		flagErr *FlagError
-		authErr *AuthError
-		exitErr *ExitError
-		httpErr *bitbucket.HTTPError
-		netErr  *bitbucket.NetworkError
+		flagErr  *FlagError
+		authErr  *AuthError
+		exitErr  *ExitError
+		notFound *NotFoundError
+		httpErr  *bitbucket.HTTPError
+		netErr   *bitbucket.NetworkError
 	)
 	switch {
 	case errors.Is(err, bitbucket.ErrDryRun):
@@ -73,6 +79,8 @@ func Classify(err error) ErrorInfo {
 		return ErrorInfo{Code: "usage", Message: err.Error(), Hint: "see `--help` for usage", Exit: 1}
 	case errors.As(err, &authErr):
 		return ErrorInfo{Code: "auth_required", Message: err.Error(), Hint: "run `khbb auth login`", Exit: 4}
+	case errors.As(err, &notFound):
+		return ErrorInfo{Code: "not_found", Message: err.Error(), Exit: 1}
 	case errors.As(err, &httpErr):
 		return classifyHTTP(httpErr)
 	case errors.As(err, &netErr):
@@ -96,7 +104,10 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 		}
 	case e.StatusCode == 404:
 		info.Code = "not_found"
-		if strings.Contains(e.URL, "/repositories/") {
+		switch {
+		case strings.Contains(e.URL, "/pullrequests/"):
+			info.Hint = "check the pull request number and that it belongs to this repository"
+		case strings.Contains(e.URL, "/repositories/"):
 			info.Hint = "check the repository name and your access: private repositories return 404 when you lack access"
 		}
 	case e.StatusCode == 409:

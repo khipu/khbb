@@ -311,6 +311,7 @@ func TestNewCmdAPI_Validation(t *testing.T) {
 		{"--include", "--paginate", "user"},
 		{"-f", "novalue", "user"},
 		{"--jq", ".[", "user"},
+		{"--jq", "nosuchfn", "user"},
 		{"-X", "POST", "--template", "{{", "user"},
 	}
 	for _, args := range cases {

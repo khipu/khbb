@@ -34,11 +34,13 @@ func TestClassify(t *testing.T) {
 		{"403 reported", &bitbucket.HTTPError{StatusCode: 403, RequiredScopes: []string{"read:pipeline:bitbucket"}}, "forbidden", 1, 403, "read:pipeline:bitbucket", false},
 		{"403 inferred", &bitbucket.HTTPError{StatusCode: 403, Method: "POST", URL: "https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/1/merge"}, "forbidden", 1, 403, "write:pullrequest:bitbucket", false},
 		{"404 repository", &bitbucket.HTTPError{StatusCode: 404, URL: "https://api.bitbucket.org/2.0/repositories/acme/nope"}, "not_found", 1, 404, "private repositories", false},
+		{"404 pull request", &bitbucket.HTTPError{StatusCode: 404, URL: "https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/99999"}, "not_found", 1, 404, "pull request number", false},
 		{"409", &bitbucket.HTTPError{StatusCode: 409}, "conflict", 1, 409, "", false},
 		{"400", &bitbucket.HTTPError{StatusCode: 400, Detail: "title is required"}, "validation", 1, 400, "title is required", false},
 		{"400 fields", &bitbucket.HTTPError{StatusCode: 400, Fields: map[string][]string{"title": {"too long"}, "source": {"branch not found"}}}, "validation", 1, 400, "source: branch not found; title: too long", false},
 		{"429", &bitbucket.HTTPError{StatusCode: 429}, "rate_limited", 1, 429, "", false},
 		{"555", &bitbucket.HTTPError{StatusCode: 555}, "server_error", 1, 555, "retry later", false},
+		{"not found", &cmdutil.NotFoundError{Msg: `no open pull request found for branch "feature/widgets" in acme/widgets`}, "not_found", 1, 0, "", false},
 		{"network", &bitbucket.NetworkError{Err: errors.New("dial tcp: i/o timeout")}, "network", 1, 0, "", false},
 		{"other", errors.New("boom"), "error", 1, 0, "", false},
 	}
