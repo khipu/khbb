@@ -87,6 +87,27 @@ func TestRequest_DryRunSkipsMutatingRequests(t *testing.T) {
 	}
 }
 
+func TestDryRun_BodyIsNullWhenEmpty(t *testing.T) {
+	var out bytes.Buffer
+	c, _ := newTestClient(t, bitbucket.Options{DryRun: true, DryRunOut: &out})
+
+	_, err := c.Request(context.Background(), "POST", "repositories/acme/widgets/pullrequests/1/decline", nil, nil)
+	if !errors.Is(err, bitbucket.ErrDryRun) {
+		t.Fatalf("expected ErrDryRun, got %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("dry-run output is not JSON: %v\n%s", err, out.String())
+	}
+	body, ok := got["body"]
+	if !ok {
+		t.Fatalf("dry-run output missing %q key: %v", "body", got)
+	}
+	if body != nil {
+		t.Errorf("body = %v, want nil", body)
+	}
+}
+
 func TestRequest_DryRunStillSendsGET(t *testing.T) {
 	c, reg := newTestClient(t, bitbucket.Options{DryRun: true})
 	reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))

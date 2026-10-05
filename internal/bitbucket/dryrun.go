@@ -8,7 +8,7 @@ import (
 // writeDryRun prints the request that would have been sent. Headers are never
 // included, and any object with "secured": true has its "value" masked.
 func writeDryRun(w io.Writer, method, url string, body []byte) error {
-	out := map[string]any{"dryRun": true, "method": method, "url": url}
+	out := map[string]any{"dryRun": true, "method": method, "url": url, "body": nil}
 	if len(body) > 0 {
 		var v any
 		if err := json.Unmarshal(body, &v); err == nil {
