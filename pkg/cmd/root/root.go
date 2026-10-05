@@ -7,6 +7,7 @@ import (
 	"github.com/khipu/khbb/internal/cmdutil"
 	apiCmd "github.com/khipu/khbb/pkg/cmd/api"
 	authCmd "github.com/khipu/khbb/pkg/cmd/auth"
+	prCmd "github.com/khipu/khbb/pkg/cmd/pr"
 	versionCmd "github.com/khipu/khbb/pkg/cmd/version"
 )
 
@@ -33,6 +34,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(
 		apiCmd.NewCmdAPI(f, nil),
 		authCmd.NewCmdAuth(f),
+		prCmd.NewCmdPR(f),
 		versionCmd.NewCmdVersion(f),
 	)
 	return cmd
