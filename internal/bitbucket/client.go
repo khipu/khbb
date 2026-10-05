@@ -5,16 +5,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // DefaultBaseURL is the Bitbucket Cloud REST API root.
 const DefaultBaseURL = "https://api.bitbucket.org/2.0/"
+
+// ErrDryRun is returned instead of sending a mutating request when Options.DryRun is set.
+var ErrDryRun = errors.New("dry run: request not sent")
 
 // Options configures a Client. Zero values select defaults.
 type Options struct {
@@ -23,6 +28,16 @@ type Options struct {
 	Token      string
 	UserAgent  string
 	HTTPClient *http.Client
+
+	// DryRun prints mutating requests to DryRunOut instead of sending them.
+	DryRun    bool
+	DryRunOut io.Writer
+	// Debug receives a log of every request and response, with credentials redacted.
+	Debug io.Writer
+	// MaxAttempts bounds retries of idempotent requests (default 3).
+	MaxAttempts int
+	// Sleep waits between retries (default time.Sleep).
+	Sleep func(time.Duration)
 }
 
 // Client talks to the Bitbucket Cloud REST API 2.0.
@@ -48,6 +63,15 @@ func New(opts Options) *Client {
 	}
 	if opts.UserAgent == "" {
 		opts.UserAgent = "khbb"
+	}
+	if opts.MaxAttempts <= 0 {
+		opts.MaxAttempts = 3
+	}
+	if opts.Sleep == nil {
+		opts.Sleep = time.Sleep
+	}
+	if opts.DryRunOut == nil {
+		opts.DryRunOut = io.Discard
 	}
 	return &Client{base: base, opts: opts}
 }
@@ -75,11 +99,18 @@ func (c *Client) URL(path string) (string, error) {
 }
 
 // Request sends a request and returns the raw response for any HTTP status.
-// The caller must close the response body.
+// The caller must close the response body. With DryRun set, mutating requests
+// are printed and ErrDryRun is returned instead.
 func (c *Client) Request(ctx context.Context, method, path string, header http.Header, body []byte) (*http.Response, error) {
 	u, err := c.URL(path)
 	if err != nil {
 		return nil, err
+	}
+	if c.opts.DryRun && isMutating(method) {
+		if err := writeDryRun(c.opts.DryRunOut, method, u, body); err != nil {
+			return nil, err
+		}
+		return nil, ErrDryRun
 	}
 	return c.send(ctx, method, u, header, body)
 }
@@ -141,16 +172,57 @@ func (c *Client) newRequest(ctx context.Context, method, u string, header http.H
 }
 
 func (c *Client) send(ctx context.Context, method, u string, header http.Header, body []byte) (*http.Response, error) {
-	req, err := c.newRequest(ctx, method, u, header, body)
-	if err != nil {
-		return nil, err
+	for attempt := 1; ; attempt++ {
+		req, err := c.newRequest(ctx, method, u, header, body)
+		if err != nil {
+			return nil, err
+		}
+		c.debugRequest(req)
+		start := time.Now()
+		resp, err := c.opts.HTTPClient.Do(req)
+		if err != nil {
+			return nil, &NetworkError{Err: err}
+		}
+		if resp.Request == nil {
+			resp.Request = req
+		}
+		c.debugResponse(resp, time.Since(start))
+		if attempt >= c.opts.MaxAttempts || !isRetryable(method, resp.StatusCode) {
+			return resp, nil
+		}
+		wait := retryDelay(resp, attempt)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		c.opts.Sleep(wait)
 	}
-	resp, err := c.opts.HTTPClient.Do(req)
-	if err != nil {
-		return nil, &NetworkError{Err: err}
+}
+
+func isMutating(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
 	}
-	if resp.Request == nil {
-		resp.Request = req
+	return true
+}
+
+// isRetryable reports whether a response is a transient failure of an idempotent request.
+func isRetryable(method string, status int) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
 	}
-	return resp, nil
+	switch status {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+// retryDelay honors Retry-After (in seconds, capped at one minute), else backs off 1s, 2s, 4s…
+func retryDelay(resp *http.Response, attempt int) time.Duration {
+	if s := resp.Header.Get("Retry-After"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
+			return min(time.Duration(n)*time.Second, time.Minute)
+		}
+	}
+	return time.Duration(1<<(attempt-1)) * time.Second
 }

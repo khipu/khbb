@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/httpmock"
@@ -20,6 +21,9 @@ func newTestClient(t *testing.T, opts bitbucket.Options) (*bitbucket.Client, *ht
 	t.Helper()
 	reg := httpmock.New(t)
 	opts.HTTPClient = reg.Client()
+	if opts.Sleep == nil {
+		opts.Sleep = func(time.Duration) {}
+	}
 	return bitbucket.New(opts), reg
 }
 
