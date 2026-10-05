@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/khipu/khbb/internal/cmdutil"
+	"github.com/khipu/khbb/pkg/cmd/pr/checks"
 	"github.com/khipu/khbb/pkg/cmd/pr/diff"
 	"github.com/khipu/khbb/pkg/cmd/pr/list"
 	prStatus "github.com/khipu/khbb/pkg/cmd/pr/status"
@@ -26,6 +27,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 		view.NewCmdView(f, nil),
 		diff.NewCmdDiff(f, nil),
 		prStatus.NewCmdStatus(f, nil),
+		checks.NewCmdChecks(f, nil),
 	)
 	return cmd
 }
