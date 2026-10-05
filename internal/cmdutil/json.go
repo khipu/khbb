@@ -33,8 +33,16 @@ type jsonExporter struct {
 func AddJSONFlags(cmd *cobra.Command, exporter *Exporter, fields []string) {
 	flags := cmd.Flags()
 	flags.StringSlice("json", nil, "Output JSON with the specified `fields`")
-	flags.StringP("jq", "q", "", "Filter JSON output using a jq `expression`")
-	flags.StringP("template", "t", "", "Format JSON output using a Go `template`")
+	if flags.ShorthandLookup("q") == nil {
+		flags.StringP("jq", "q", "", "Filter JSON output using a jq `expression`")
+	} else {
+		flags.String("jq", "", "Filter JSON output using a jq `expression`")
+	}
+	if flags.ShorthandLookup("t") == nil {
+		flags.StringP("template", "t", "", "Format JSON output using a Go `template`")
+	} else {
+		flags.String("template", "", "Format JSON output using a Go `template`")
+	}
 
 	prev := cmd.PreRunE
 	cmd.PreRunE = func(c *cobra.Command, args []string) error {
@@ -117,6 +125,9 @@ func (e *jsonExporter) Write(ios *iostreams.IOStreams, data any) error {
 // Slices always become JSON arrays, never null.
 func filterFields(data any, fields []string) (any, error) {
 	v := reflect.ValueOf(data)
+	if !v.IsValid() {
+		return nil, nil
+	}
 	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return nil, nil

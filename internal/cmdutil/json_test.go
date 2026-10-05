@@ -125,3 +125,42 @@ func TestJSON_NotRequestedLeavesExporterNil(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestJSON_NilData(t *testing.T) {
+	out, err := runJSON(t, nil, "--json", "id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "null\n" {
+		t.Errorf("out = %q, want %q", out, "null\n")
+	}
+}
+
+func TestJSON_AddJSONFlagsSkipsTakenShorthand(t *testing.T) {
+	ios, _, out, _ := iostreams.Test()
+	var title string
+	var exporter cmdutil.Exporter
+	cmd := &cobra.Command{
+		Use: "sample",
+		RunE: func(*cobra.Command, []string) error {
+			if exporter == nil {
+				return errors.New("exporter not set")
+			}
+			return exporter.Write(ios, samples)
+		},
+	}
+	cmd.Flags().StringVarP(&title, "title", "t", "", "the title")
+	cmdutil.AddJSONFlags(cmd, &exporter, []string{"id", "title", "state"})
+	cmd.SetArgs([]string{"--json", "id", "--template", `{{range .}}#{{.id}}{{end}}`, "-t", "Hello"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Hello" {
+		t.Errorf("title = %q, want %q (-t must stay bound to --title)", title, "Hello")
+	}
+	if out.String() != "#1#2" {
+		t.Errorf("out = %q, want %q (--template should still work long-only)", out.String(), "#1#2")
+	}
+}
