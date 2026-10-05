@@ -1,0 +1,132 @@
+package cmdutil
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/khipu/khbb/internal/bitbucket"
+	"github.com/khipu/khbb/internal/iostreams"
+)
+
+// FlagError is a usage error: wrong or missing flags or arguments.
+type FlagError struct{ Err error }
+
+func (e *FlagError) Error() string { return e.Err.Error() }
+func (e *FlagError) Unwrap() error { return e.Err }
+
+// FlagErrorf returns a *FlagError.
+func FlagErrorf(format string, args ...any) error {
+	return &FlagError{Err: fmt.Errorf(format, args...)}
+}
+
+// ErrCancel means the user declined a prompt.
+var ErrCancel = errors.New("cancelled")
+
+// ErrConfirmationRequired means a destructive action ran without a terminal and without --yes.
+var ErrConfirmationRequired = errors.New("this action needs confirmation: rerun with --yes")
+
+// AuthError means credentials are missing or were rejected.
+type AuthError struct{ Msg string }
+
+func (e *AuthError) Error() string { return e.Msg }
+
+// ExitError ends the command with Code without printing anything.
+type ExitError struct{ Code int }
+
+func (e *ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
+
+// ErrorInfo is the classified form of an error, as printed to stderr.
+type ErrorInfo struct {
+	Code    string `json:"code"`
+	Status  int    `json:"status,omitempty"`
+	Message string `json:"message"`
+	Hint    string `json:"hint,omitempty"`
+	Exit    int    `json:"-"`
+	Silent  bool   `json:"-"`
+}
+
+// Classify maps an error to its code, message, hint and process exit code.
+func Classify(err error) ErrorInfo {
+	var (
+		flagErr *FlagError
+		authErr *AuthError
+		exitErr *ExitError
+		httpErr *bitbucket.HTTPError
+		netErr  *bitbucket.NetworkError
+	)
+	switch {
+	case errors.Is(err, bitbucket.ErrDryRun):
+		return ErrorInfo{Exit: 0, Silent: true}
+	case errors.As(err, &exitErr):
+		return ErrorInfo{Exit: exitErr.Code, Silent: true}
+	case errors.Is(err, ErrCancel):
+		return ErrorInfo{Code: "cancelled", Message: "cancelled", Exit: 2}
+	case errors.Is(err, ErrConfirmationRequired):
+		return ErrorInfo{Code: "confirmation_required", Message: err.Error(), Exit: 1}
+	case errors.As(err, &flagErr):
+		return ErrorInfo{Code: "usage", Message: err.Error(), Hint: "see `--help` for usage", Exit: 1}
+	case errors.As(err, &authErr):
+		return ErrorInfo{Code: "auth_required", Message: err.Error(), Hint: "run `khbb auth login`", Exit: 4}
+	case errors.As(err, &httpErr):
+		return classifyHTTP(httpErr)
+	case errors.As(err, &netErr):
+		return ErrorInfo{Code: "network", Message: err.Error(), Exit: 1}
+	}
+	return ErrorInfo{Code: "error", Message: err.Error(), Exit: 1}
+}
+
+func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
+	info := ErrorInfo{Status: e.StatusCode, Message: e.Error(), Exit: 1}
+	switch {
+	case e.StatusCode == 401:
+		info.Code, info.Exit = "auth_required", 4
+		info.Hint = "the token is invalid or expired; run `khbb auth login`"
+	case e.StatusCode == 403:
+		info.Code = "forbidden"
+		if len(e.RequiredScopes) > 0 {
+			info.Hint = "the token is missing scope(s) " + strings.Join(e.RequiredScopes, ", ") + "; create a token with them and run `khbb auth login`"
+		} else if scope := bitbucket.ScopeFor(e.Method, e.URL); scope != "" {
+			info.Hint = "this request needs the " + scope + " scope, or repository permissions you may not have"
+		}
+	case e.StatusCode == 404:
+		info.Code = "not_found"
+		info.Hint = "private repositories return 404 when you lack access"
+	case e.StatusCode == 409:
+		info.Code = "conflict"
+	case e.StatusCode == 400 || e.StatusCode == 422:
+		info.Code = "validation"
+	case e.StatusCode == 429:
+		info.Code = "rate_limited"
+	case e.StatusCode == 555:
+		info.Code = "server_error"
+		info.Hint = "Bitbucket timed out; retry later"
+	case e.StatusCode >= 500:
+		info.Code = "server_error"
+	default:
+		info.Code = "error"
+	}
+	if info.Hint == "" && e.Detail != "" {
+		info.Hint = e.Detail
+	}
+	return info
+}
+
+// PrintError reports err on stderr (as one JSON line when asJSON) and returns the exit code.
+func PrintError(ios *iostreams.IOStreams, err error, asJSON bool) int {
+	info := Classify(err)
+	if info.Silent {
+		return info.Exit
+	}
+	if asJSON {
+		b, _ := json.Marshal(map[string]ErrorInfo{"error": info})
+		fmt.Fprintln(ios.ErrOut, string(b))
+		return info.Exit
+	}
+	fmt.Fprintf(ios.ErrOut, "error: %s\n", info.Message)
+	if info.Hint != "" {
+		fmt.Fprintf(ios.ErrOut, "hint: %s\n", info.Hint)
+	}
+	return info.Exit
+}
