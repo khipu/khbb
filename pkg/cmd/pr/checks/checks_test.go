@@ -146,3 +146,32 @@ func TestNewCmdChecks_BadFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestChecks_WatchSurvivesFourTransientErrors(t *testing.T) {
+	reg := newReg(t,
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		page(prtest.Status("build", "SUCCESSFUL")),
+	)
+	out, _, slept, err := run(t, reg, false, "--watch")
+	if err != nil || out != "build\tsuccessful\thttps://ci.example.com/build\n" || !slices.Equal(slept, []time.Duration{5 * time.Second, 5 * time.Second, 5 * time.Second, 5 * time.Second}) {
+		t.Errorf("out %q slept %v err %v", out, slept, err)
+	}
+}
+
+func TestChecks_WatchGivesUpOnFifthTransientError(t *testing.T) {
+	reg := newReg(t,
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+		httpmock.StringResponse(503, "busy"),
+	)
+	_, _, slept, err := run(t, reg, false, "--watch")
+	var httpErr *bitbucket.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != 503 || !slices.Equal(slept, []time.Duration{5 * time.Second, 5 * time.Second, 5 * time.Second, 5 * time.Second}) {
+		t.Errorf("err %v slept %v", err, slept)
+	}
+}

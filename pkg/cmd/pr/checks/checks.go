@@ -34,7 +34,8 @@ type ChecksOptions struct {
 	FailFast bool
 }
 
-// maxConsecutiveErrors bounds how many transient failures in a row --watch tolerates.
+// maxConsecutiveErrors is how many failed polls in a row --watch accepts: it gives up on the 5th
+// consecutive transient failure (after 4 retries).
 const maxConsecutiveErrors = 5
 
 const clearScreen = "\x1b[H\x1b[2J"
