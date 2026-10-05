@@ -19,6 +19,8 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Version:       f.AppVersion,
+		Args:          cobra.ArbitraryArgs,
+		RunE:          cmdutil.GroupRunE,
 	}
 	cmd.SetVersionTemplate(versionCmd.Format(f.AppVersion, f.BuildCommit, f.BuildDate))
 	cmd.SetOut(f.IOStreams.Out)

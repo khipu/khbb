@@ -14,7 +14,7 @@ func NewCmdVersion(f *cmdutil.Factory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Show the khbb version",
-		Args:  cobra.NoArgs,
+		Args:  cmdutil.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := fmt.Fprint(f.IOStreams.Out, Format(f.AppVersion, f.BuildCommit, f.BuildDate))
 			return err

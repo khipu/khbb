@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/AlecAivazis/survey/v2/terminal"
+
 	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/iostreams"
 )
@@ -61,7 +63,7 @@ func Classify(err error) ErrorInfo {
 		return ErrorInfo{Exit: 0, Silent: true}
 	case errors.As(err, &exitErr):
 		return ErrorInfo{Exit: exitErr.Code, Silent: true}
-	case errors.Is(err, ErrCancel):
+	case errors.Is(err, ErrCancel), errors.Is(err, terminal.InterruptErr):
 		return ErrorInfo{Code: "cancelled", Message: "cancelled", Exit: 2}
 	case errors.Is(err, ErrConfirmationRequired):
 		return ErrorInfo{Code: "confirmation_required", Message: err.Error(), Exit: 1}
@@ -92,7 +94,9 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 		}
 	case e.StatusCode == 404:
 		info.Code = "not_found"
-		info.Hint = "private repositories return 404 when you lack access"
+		if strings.Contains(e.URL, "/repositories/") {
+			info.Hint = "check the repository name and your access: private repositories return 404 when you lack access"
+		}
 	case e.StatusCode == 409:
 		info.Code = "conflict"
 	case e.StatusCode == 400 || e.StatusCode == 422:

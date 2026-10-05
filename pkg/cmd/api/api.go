@@ -69,7 +69,7 @@ are sent as query parameters; otherwise they form a JSON object body.
   $ khbb api 'repositories/{workspace}/{repo}/pullrequests' --paginate --jq '.[].title'
   $ khbb api 'repositories/{workspace}/{repo}/pullrequests' -X GET -f q='state="OPEN"'
   $ khbb api -X POST 'repositories/{workspace}/{repo}/pullrequests/42/comments' --input comment.json`,
-		Args: cobra.ExactArgs(1),
+		Args: cmdutil.ExactArgs(1, "<path>"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Path = args[0]
 			opts.MethodSet = cmd.Flags().Changed("method")

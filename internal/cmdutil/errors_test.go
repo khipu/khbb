@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AlecAivazis/survey/v2/terminal"
+
 	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/internal/iostreams"
@@ -24,13 +26,14 @@ func TestClassify(t *testing.T) {
 		{"dry run", fmt.Errorf("wrapped: %w", bitbucket.ErrDryRun), "", 0, 0, "", true},
 		{"exit code", &cmdutil.ExitError{Code: 8}, "", 8, 0, "", true},
 		{"cancel", cmdutil.ErrCancel, "cancelled", 2, 0, "", false},
+		{"interrupt", fmt.Errorf("could not prompt: %w", terminal.InterruptErr), "cancelled", 2, 0, "", false},
 		{"confirm", cmdutil.ErrConfirmationRequired, "confirmation_required", 1, 0, "", false},
 		{"flag", cmdutil.FlagErrorf("required flag --title not set"), "usage", 1, 0, "--help", false},
 		{"auth", &cmdutil.AuthError{Msg: "not logged in to bitbucket.org"}, "auth_required", 4, 0, "khbb auth login", false},
 		{"401", &bitbucket.HTTPError{StatusCode: 401}, "auth_required", 4, 401, "khbb auth login", false},
 		{"403 reported", &bitbucket.HTTPError{StatusCode: 403, RequiredScopes: []string{"read:pipeline:bitbucket"}}, "forbidden", 1, 403, "read:pipeline:bitbucket", false},
 		{"403 inferred", &bitbucket.HTTPError{StatusCode: 403, Method: "POST", URL: "https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/1/merge"}, "forbidden", 1, 403, "write:pullrequest:bitbucket", false},
-		{"404", &bitbucket.HTTPError{StatusCode: 404}, "not_found", 1, 404, "private repositories", false},
+		{"404 repository", &bitbucket.HTTPError{StatusCode: 404, URL: "https://api.bitbucket.org/2.0/repositories/acme/nope"}, "not_found", 1, 404, "private repositories", false},
 		{"409", &bitbucket.HTTPError{StatusCode: 409}, "conflict", 1, 409, "", false},
 		{"400", &bitbucket.HTTPError{StatusCode: 400, Detail: "title is required"}, "validation", 1, 400, "title is required", false},
 		{"429", &bitbucket.HTTPError{StatusCode: 429}, "rate_limited", 1, 429, "", false},
@@ -51,13 +54,26 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+func TestClassify_404HintOnlyForRepositories(t *testing.T) {
+	info := cmdutil.Classify(&bitbucket.HTTPError{StatusCode: 404, URL: "https://api.bitbucket.org/2.0/user"})
+	if info.Code != "not_found" || info.Hint != "" {
+		t.Errorf("Classify = %+v, want not_found without a hint", info)
+	}
+}
+
+const repoNotFoundHint = "check the repository name and your access: private repositories return 404 when you lack access"
+
+func repoNotFound() *bitbucket.HTTPError {
+	return &bitbucket.HTTPError{StatusCode: 404, Message: "Repository acme/nope not found", URL: "https://api.bitbucket.org/2.0/repositories/acme/nope"}
+}
+
 func TestPrintError_Human(t *testing.T) {
 	ios, _, out, errOut := iostreams.Test()
-	code := cmdutil.PrintError(ios, &bitbucket.HTTPError{StatusCode: 404, Message: "Repository acme/nope not found"}, false)
+	code := cmdutil.PrintError(ios, repoNotFound(), false)
 	if code != 1 {
 		t.Errorf("exit = %d", code)
 	}
-	want := "error: Repository acme/nope not found (HTTP 404)\nhint: private repositories return 404 when you lack access\n"
+	want := "error: Repository acme/nope not found (HTTP 404)\nhint: " + repoNotFoundHint + "\n"
 	if errOut.String() != want {
 		t.Errorf("stderr = %q, want %q", errOut.String(), want)
 	}
@@ -68,8 +84,8 @@ func TestPrintError_Human(t *testing.T) {
 
 func TestPrintError_JSON(t *testing.T) {
 	ios, _, _, errOut := iostreams.Test()
-	cmdutil.PrintError(ios, &bitbucket.HTTPError{StatusCode: 404, Message: "Repository acme/nope not found"}, true)
-	want := `{"error":{"code":"not_found","status":404,"message":"Repository acme/nope not found (HTTP 404)","hint":"private repositories return 404 when you lack access"}}` + "\n"
+	cmdutil.PrintError(ios, repoNotFound(), true)
+	want := `{"error":{"code":"not_found","status":404,"message":"Repository acme/nope not found (HTTP 404)","hint":"` + repoNotFoundHint + `"}}` + "\n"
 	if errOut.String() != want {
 		t.Errorf("stderr = %q, want %q", errOut.String(), want)
 	}

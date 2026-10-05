@@ -26,7 +26,7 @@ func NewCmdLogout(f *cmdutil.Factory, runF func(*LogoutOptions) error) *cobra.Co
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the stored Bitbucket credentials",
-		Args:  cobra.NoArgs,
+		Args:  cmdutil.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if runF != nil {
 				return runF(opts)

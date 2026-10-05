@@ -62,7 +62,7 @@ environment instead, set KHBB_EMAIL and KHBB_TOKEN.`, tokenURL, strings.Join(bit
 
   # Non-interactive (scripts, agents)
   $ echo "$TOKEN" | khbb auth login --email you@example.com --with-token`,
-		Args: cobra.NoArgs,
+		Args: cmdutil.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if runF != nil {
 				return runF(opts)

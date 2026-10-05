@@ -37,7 +37,7 @@ func NewCmdStatus(f *cmdutil.Factory, runF func(*StatusOptions) error) *cobra.Co
 		Use:   "status",
 		Short: "Show and verify the current authentication",
 		Long:  "Show which account khbb uses and verify the token. Exits with status 4 when not logged in or when the token is rejected.",
-		Args:  cobra.NoArgs,
+		Args:  cmdutil.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if runF != nil {
 				return runF(opts)
