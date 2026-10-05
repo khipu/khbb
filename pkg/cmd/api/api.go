@@ -104,6 +104,8 @@ func validateFlags(opts *APIOptions) error {
 		return cmdutil.FlagErrorf("--paginate only works with GET requests")
 	case opts.Paginate && opts.Include:
 		return cmdutil.FlagErrorf("--include cannot be combined with --paginate")
+	case opts.Paginate && opts.Input != "":
+		return cmdutil.FlagErrorf("--input cannot be combined with --paginate")
 	case opts.Input != "" && (len(opts.RawFields) > 0 || len(opts.TypedFields) > 0):
 		return cmdutil.FlagErrorf("--input cannot be combined with -f/-F")
 	case opts.JQ != "" && opts.Template != "":
@@ -132,7 +134,11 @@ func apiRun(ctx context.Context, opts *APIOptions) error {
 		return err
 	}
 	method := strings.ToUpper(opts.Method)
-	if !opts.MethodSet && (len(params) > 0 || opts.Input != "") {
+	switch {
+	case opts.Paginate:
+		// validateFlags rejects --paginate with --input or a non-GET -X; fields go on the query string.
+		method = http.MethodGet
+	case !opts.MethodSet && (len(params) > 0 || opts.Input != ""):
 		method = http.MethodPost
 	}
 	var body []byte

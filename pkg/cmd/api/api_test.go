@@ -125,6 +125,24 @@ func TestAPI_GETFieldsBecomeQuery(t *testing.T) {
 	}
 }
 
+func TestAPI_PaginateSendsFieldsAsQuery(t *testing.T) {
+	opts, reg, _, out := newOpts(t)
+	opts.Path = "repositories/{workspace}/{repo}/pullrequests"
+	opts.Paginate = true
+	opts.RawFields = []string{`q=state="OPEN"`}
+	reg.Register("GET", prs, httpmock.JSONResponse(200, `{"values":[{"id":1}]}`))
+
+	if err := apiRun(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := reg.Calls[0].URL.Query().Get("q"); got != `state="OPEN"` {
+		t.Errorf("q = %q", got)
+	}
+	if out.String() != `[{"id":1}]`+"\n" {
+		t.Errorf("out = %q", out.String())
+	}
+}
+
 func TestAPI_TypedFieldFromFile(t *testing.T) {
 	opts, reg, _, _ := newOpts(t)
 	path := filepath.Join(t.TempDir(), "body.md")
@@ -287,6 +305,7 @@ func TestAPI_DryRunDoesNotSend(t *testing.T) {
 func TestNewCmdAPI_Validation(t *testing.T) {
 	cases := [][]string{
 		{"--paginate", "-X", "POST", "user"},
+		{"--paginate", "--input", "body.json", "user"},
 		{"--input", "body.json", "-f", "a=b", "user"},
 		{"--jq", ".", "--template", "{{.}}", "user"},
 		{"--include", "--paginate", "user"},
