@@ -113,13 +113,20 @@ func loginRun(ctx context.Context, opts *LoginOptions) error {
 		}
 		cfg.InsecureToken = ""
 	}
-	if previous != "" && previous != email {
-		_ = opts.DeleteToken(previous)
-	}
 	cfg.Email = email
 	cfg.Username = user.Nickname
 	if err := cfg.Save(); err != nil {
 		return err
+	}
+
+	if previous != "" && previous != email {
+		if err := opts.DeleteToken(previous); err != nil {
+			fmt.Fprintf(opts.IO.ErrOut, "warning: could not remove the previous token for %s from the system keyring: %v\n", previous, err)
+		}
+	}
+	if opts.InsecureStorage {
+		// A keyring copy would take precedence over the new file token; the keyring may be unavailable here, so this is best effort.
+		_ = opts.DeleteToken(email)
 	}
 
 	fmt.Fprintf(opts.IO.ErrOut, "Logged in to bitbucket.org as %s\n", user.Nickname)

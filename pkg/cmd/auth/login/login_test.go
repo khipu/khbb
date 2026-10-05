@@ -228,3 +228,91 @@ func TestLogin_WarnsWhenEnvTokenSet(t *testing.T) {
 		t.Errorf("stderr = %q", fx.stderr.String())
 	}
 }
+
+func TestLogin_CleanupFailureWarns(t *testing.T) {
+	fx := newFixture(t)
+	fx.cfg.Email = "old@example.com"
+	fx.stdin.WriteString("s3cret")
+	fx.opts.Email = "dev@example.com"
+	fx.opts.WithToken = true
+	fx.opts.DeleteToken = func(email string) error {
+		if email == "old@example.com" {
+			return errors.New("keyring locked")
+		}
+		fx.deleted = append(fx.deleted, email)
+		return nil
+	}
+	fx.reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))
+
+	if err := loginRun(context.Background(), fx.opts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fx.stderr.String(), "could not remove the previous token for old@example.com") {
+		t.Errorf("stderr = %q", fx.stderr.String())
+	}
+}
+
+func TestLogin_SaveFailureKeepsOldToken(t *testing.T) {
+	fx := newFixture(t)
+	fx.cfg.Email = "old@example.com"
+	fx.stdin.WriteString("s3cret")
+	fx.opts.Email = "dev@example.com"
+	fx.opts.WithToken = true
+	// Make Save fail by pointing the config path to an unwritable location
+	originalCfg := fx.cfg
+	fx.opts.Config = func() (*config.Config, error) {
+		// Return a config with a path under a read-only directory
+		cfg := *originalCfg
+		cfg.Email = "old@example.com"
+		// Set the path to something that will fail to write
+		cfg.InsecureToken = "won't save"
+		// Return the same config but override its Save to fail
+		return &cfg, nil
+	}
+	// Override the config's Save to fail
+	savedCfg := fx.cfg
+	fx.opts.Config = func() (*config.Config, error) {
+		cfg := *savedCfg
+		cfg.Email = "old@example.com"
+		return &cfg, nil
+	}
+	// Create a mock config that fails to save by making it read-only
+	tempDir := t.TempDir()
+	readOnlyDir := filepath.Join(tempDir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.LoadFile(filepath.Join(readOnlyDir, "config.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Email = "old@example.com"
+	fx.opts.Config = func() (*config.Config, error) { return cfg, nil }
+
+	fx.reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))
+
+	err = loginRun(context.Background(), fx.opts)
+	if err == nil {
+		t.Fatal("expected error when saving config")
+	}
+	if len(fx.deleted) != 0 {
+		t.Errorf("deleted = %v, expected empty (old token should not be deleted if save fails)", fx.deleted)
+	}
+}
+
+func TestLogin_InsecureStorageRemovesKeyringCopy(t *testing.T) {
+	fx := newFixture(t)
+	fx.cfg.Email = "dev@example.com"
+	fx.stdin.WriteString("s3cret")
+	fx.opts.Email = "dev@example.com"
+	fx.opts.WithToken = true
+	fx.opts.InsecureStorage = true
+	fx.reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))
+
+	if err := loginRun(context.Background(), fx.opts); err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.deleted) != 1 || fx.deleted[0] != "dev@example.com" {
+		t.Errorf("deleted = %v, expected [dev@example.com]", fx.deleted)
+	}
+}
