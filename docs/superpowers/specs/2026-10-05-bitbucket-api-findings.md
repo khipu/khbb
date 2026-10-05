@@ -6,7 +6,7 @@ Resolves the "items to verify" list (§14) of
 - **Source A:** Bitbucket Cloud OpenAPI document,
   `https://dac-static.atlassian.com/cloud/bitbucket/swagger.v3.json`
   (OpenAPI 3.0.0, API 2.0), downloaded 2026-10-05.
-- **Source B:** live, read-only requests with `khbb api` (Plan 1, Task 11).
+- **Source B:** live, read-only requests with `khbb api` (Plan 1, Task 12).
 - **Source C:** write requests against the sandbox repo (Plan 2).
 
 No personal data is recorded here: only endpoint shapes, field names and enum values.
@@ -61,7 +61,17 @@ No personal data is recorded here: only endpoint shapes, field names and enum va
 | # | Question | How to resolve | When |
 |---|---|---|---|
 | 1 | Does `POST /pullrequests` add default reviewers automatically? | Create a PR in the sandbox repo without `reviewers`; inspect the response. | Plan 2 (Source C) |
-| 5 | Do pipeline endpoints accept a build number in place of `{pipeline_uuid}`? | `khbb api 'repositories/<ws>/<repo>/pipelines/<build_number>'` | Plan 1, Task 11 |
-| 9 | Does the API expose a token's granted scopes? | `khbb api user -i --silent`; look for scope-related response headers. | Plan 1, Task 11 |
-| 10 | Bearer vs Basic | Basic (`email:token`) is documented and sufficient. | Closed: keep Basic, no verification needed |
-| — | Maximum `pagelen` per endpoint | `khbb api '…/pullrequests?pagelen=100'` and `…/pipelines?pagelen=100` | Plan 1, Task 11 |
+
+## Resolved with live requests (Source B)
+
+Verified 2026-10-05 with `khbb api` (Plan 1, Task 12), read-only `GET`s against one
+Khipu repository with recent pipelines and pull requests.
+
+| # | Question | Finding | Decision |
+|---|---|---|---|
+| 5 | Build number in place of `{pipeline_uuid}` | `GET …/pipelines/<build_number>` → 200 with the full pipeline (including `uuid`). `GET …/pipelines/<build_number>/steps` → 200. `GET …/pipelines/<build_number>/steps/<step_uuid>/log` → 200 (with the right `Accept`, see below). The list filter `?q=build_number=N` is **ignored** (returns the unfiltered list). | Plan 3 uses build numbers directly in paths; never look a build up through `q=`. |
+| 9 | Does the API expose a token's granted scopes? | Every response carries `X-Oauth-Scopes` (comma-separated granted scopes), `X-Accepted-Oauth-Scopes` (what the endpoint accepts) and `X-Credential-Type: api_token`. | `auth status` can list granted scopes and flag missing `RequiredScopes`; 403 hints can compare accepted vs granted. Follow-up for Plan 2. |
+| 10 | Bearer vs Basic | Basic (`email:token`) works for every request made. | Closed: keep Basic. |
+| — | Maximum `pagelen` | `pullrequests`: 50 (`pagelen=100` → 400 `Invalid pagelen`). `pipelines`: 100. `workspaces/{ws}/members`: 100. `effective-default-reviewers`: 100. `pipelines/{n}/steps`: ignores `pagelen` (returns all steps). | Keep the client default of 50; Plans 2–3 need no per-endpoint override. |
+| — | Pipeline/step state shape (complements #7) | Completed pipelines: `state.name = COMPLETED`, `state.result.name ∈ {SUCCESSFUL, FAILED}` observed, `state.stage = null`. Steps: `state.name` + `state.result.name`. | Matches the OpenAPI-derived mapping in #7. |
+| — | Step log endpoint | With `Accept: application/json` or `text/plain` → **406 Not Acceptable**. With `Accept: application/octet-stream` or `*/*` → 200. The body is served through a redirect (final response over HTTP/1.1) and was ~1.2 MB for a three-step pipeline. | Plan 3: request logs with `Accept: application/octet-stream`; replace the 30 s whole-request `http.Client.Timeout` with transport-level timeouts so large logs are not cut off (final-review Minor #9). |
