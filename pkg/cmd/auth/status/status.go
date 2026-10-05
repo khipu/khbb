@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -59,7 +60,7 @@ func statusRun(ctx context.Context, opts *StatusOptions) error {
 	if err != nil {
 		return err
 	}
-	user, err := opts.NewClient(creds.Email, creds.Token).CurrentUser(ctx)
+	user, scopes, err := opts.NewClient(creds.Email, creds.Token).WhoAmI(ctx)
 	if err != nil {
 		var httpErr *bitbucket.HTTPError
 		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusUnauthorized {
@@ -69,5 +70,11 @@ func statusRun(ctx context.Context, opts *StatusOptions) error {
 	}
 	fmt.Fprintf(opts.IO.Out, "bitbucket.org\n  Logged in as %s (%s)\n  Email: %s\n  Token source: %s\n",
 		user.Nickname, user.DisplayName, creds.Email, creds.Source)
+	if scopes != nil {
+		fmt.Fprintf(opts.IO.Out, "  Token scopes: %s\n", strings.Join(scopes, ", "))
+		if missing := bitbucket.MissingScopes(scopes); len(missing) > 0 {
+			fmt.Fprintf(opts.IO.Out, "  Missing scopes: %s\n", strings.Join(missing, ", "))
+		}
+	}
 	return nil
 }

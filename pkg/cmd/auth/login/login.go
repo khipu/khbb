@@ -85,6 +85,10 @@ func loginRun(ctx context.Context, opts *LoginOptions) error {
 		fmt.Fprintln(opts.IO.ErrOut, "warning: KHBB_TOKEN is set and takes precedence over stored credentials")
 	}
 
+	if !opts.WithToken && opts.IO.CanPrompt() {
+		printTokenInstructions(opts.IO.ErrOut)
+	}
+
 	email, err := readEmail(opts, cfg.Email)
 	if err != nil {
 		return err
@@ -164,10 +168,6 @@ func readToken(opts *LoginOptions) (string, error) {
 		}
 		token = string(b)
 	case opts.IO.CanPrompt():
-		fmt.Fprintf(opts.IO.ErrOut, "Create an API token at %s\nwith these scopes:\n", tokenURL)
-		for _, s := range bitbucket.RequiredScopes {
-			fmt.Fprintf(opts.IO.ErrOut, "  - %s\n", s)
-		}
 		answer, err := opts.Prompter.Password("API token:")
 		if err != nil {
 			return "", err
@@ -180,4 +180,11 @@ func readToken(opts *LoginOptions) (string, error) {
 		return "", cmdutil.FlagErrorf("the API token cannot be empty")
 	}
 	return token, nil
+}
+
+func printTokenInstructions(w io.Writer) {
+	fmt.Fprintf(w, "Create an API token at %s\nwith these scopes:\n", tokenURL)
+	for _, s := range bitbucket.RequiredScopes {
+		fmt.Fprintf(w, "  - %s\n", s)
+	}
 }

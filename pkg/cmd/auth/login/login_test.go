@@ -122,7 +122,12 @@ func TestLogin_InteractivePromptsAndListsScopes(t *testing.T) {
 	fx.ios.SetStdinTTY(true)
 	fx.ios.SetStdoutTTY(true)
 	pm := prompter.NewMock(t)
-	pm.RegisterInput("Atlassian account email:", func(_, _ string) (string, error) { return " dev@example.com ", nil })
+	pm.RegisterInput("Atlassian account email:", func(_, _ string) (string, error) {
+		if !strings.Contains(fx.stderr.String(), tokenURL) {
+			t.Error("the token instructions must be shown before the email prompt")
+		}
+		return " dev@example.com ", nil
+	})
 	pm.RegisterPassword("API token:", func(string) (string, error) { return "s3cret", nil })
 	fx.opts.Prompter = pm
 	fx.reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))

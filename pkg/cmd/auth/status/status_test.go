@@ -70,3 +70,20 @@ func TestStatus_CredentialErrorPassesThrough(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestStatus_ShowsScopesAndMissingOnes(t *testing.T) {
+	opts, reg, out := newOpts(t, keyringCreds, nil)
+	reg.Register("GET", "/2.0/user", httpmock.WithHeader(
+		httpmock.JSONResponse(200, `{"display_name":"Ada Example","nickname":"ada"}`),
+		"X-Oauth-Scopes", "read:user:bitbucket, read:pullrequest:bitbucket"))
+
+	if err := statusRun(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	want := "bitbucket.org\n  Logged in as ada (Ada Example)\n  Email: dev@example.com\n  Token source: keyring\n" +
+		"  Token scopes: read:user:bitbucket, read:pullrequest:bitbucket\n" +
+		"  Missing scopes: read:workspace:bitbucket, read:repository:bitbucket, write:pullrequest:bitbucket, read:pipeline:bitbucket, write:pipeline:bitbucket\n"
+	if out() != want {
+		t.Errorf("out = %q, want %q", out(), want)
+	}
+}
