@@ -60,7 +60,7 @@ No personal data is recorded here: only endpoint shapes, field names and enum va
 
 | # | Question | How to resolve | When |
 |---|---|---|---|
-| 1 | Does `POST /pullrequests` add default reviewers automatically? | Create a PR in the sandbox repo without `reviewers`; inspect the response. | Plan 2 (Source C) |
+| 1 | Does `POST /pullrequests` add default reviewers automatically? | Not answerable in the sandbox: it has no default reviewers (`effective-default-reviewers` → 0), and PRs created there came back with `reviewers: []`. Plan 2b sidesteps the question: `pr create` reads `effective-default-reviewers` itself and sends the list explicitly (minus the author). | Plan 2b (decided, not verified) |
 
 ## Resolved with live requests (Source B)
 
@@ -90,3 +90,30 @@ Verified 2026-10-05 with read-only `khbb api` requests. Shapes and status codes 
 | Commit statuses | `GET …/pullrequests/{id}/statuses` items: `key, name, state (SUCCESSFUL observed), description, url, updated_on, refname, commit`. Older PRs may have none. | `pr checks` with no statuses exits 0 with a notice. |
 | Diff / patch | `…/diff` and `…/patch` answer 200 with `Accept` `application/json`, `text/plain` or `*/*`. `…/diffstat` items: `status, lines_added, lines_removed, old{path}\|null, new{path}\|null`. | Text endpoints are fetched with `Accept: */*` (works here and for logs). |
 | `pagelen` | `statuses`, `diffstat` and `comments` accept 50. | Client default 50 is safe. |
+
+## Pull request write API (Source C, sandbox)
+
+Verified 2026-10-05 in the sandbox repository `khipu/khipubb-sandbox` with `khbb api`,
+using probe branches `khbb-probe/*` (all deleted afterwards; PRs #1–#2 merged, #3–#4
+declined). Shapes and status codes only.
+
+| Topic | Finding | Decision |
+|---|---|---|
+| Create | `POST …/pullrequests` with `title`, `source.branch.name`, optional `destination`, `description`, `draft`, `close_source_branch`, `reviewers` → **201**. `draft: true` is honored. Without `destination` the main branch is used. | `pr create` sends exactly these fields. |
+| Create, branch already has an open PR | **No error**: Bitbucket returns the existing PR (same `id`) and **overwrites** its `title` and `close_source_branch` with the new values. | `pr create` must look up an open PR for the source branch first and refuse (exit 1, print its URL) instead of silently editing it. |
+| Create, missing source branch | **400** `error.fields.source = ["branch not found: <name>"]`. | Surface as-is; hint to push the branch. |
+| Reviewers | Accepted keys: `uuid` and `account_id`. `nickname` → **400** "Malformed reviewers list". An unknown uuid/account ID → the same 400. The author as reviewer → **400** "`<name>` is the author and cannot be included as a reviewer." | Resolve every `--reviewer` to a uuid before the request; drop the author from default reviewers. |
+| Member lookup | `GET workspaces/{ws}/members?q=user.nickname="X"` and `q=user.account_id="X"` filter server-side (0 or 1 result); items carry `user{uuid, account_id, nickname, display_name}`. Needs `read:workspace`. | `--reviewer` resolves nicknames with one filtered request each. |
+| Edit | `PUT …/pullrequests/{id}` is **partial**: a body with only `title` keeps `description`, `draft`, `close_source_branch`. `draft: false` turns a draft into a ready PR. `reviewers: []` clears reviewers. Editing a closed PR → **400** "Can only update an open pull request." | `pr edit` sends only the changed fields; `pr ready` = `PUT {draft:false}`. |
+| Reopen | Not possible: `PUT {state: OPEN}` on a declined PR → 400 (above). | No `pr reopen`. |
+| Comments | `POST …/comments` with `content.raw` → 201. Inline: `inline{path, to}` → 201, response adds `src_rev, dest_rev, context_lines, outdated`. Reply: `parent{id}` → 201. **Not validated**: a line outside the diff (`to: 99`) and a path not in the diff both → 201. Comments on a declined PR → 201. | `pr comment` validates `--path` against the diffstat itself; line numbers are not checked. |
+| Approve / request changes | `POST …/approve` → 200 participant `{approved: true, role, state: approved}` — **allowed on your own PR**. `DELETE …/approve` → 204. `POST …/request-changes` → 200 `{approved: false, state: changes_requested}`; `DELETE` → 204. | No self-approval guard is needed for the API to work; `pr approve` mirrors the API. |
+| Decline | `POST …/decline` with optional body `{"message": "…"}` → 200 `state: DECLINED`, the message lands in the PR's `reason`. Declining a closed PR → 400 `fields.newstatus = ["This pull request is already closed."]`. | `pr decline --message` maps to `message`. |
+| Merge, sync | `POST …/merge` body `{type: "pullrequest", merge_strategy, message, close_source_branch}` → **200** with the merged PR (`state: MERGED`, `merge_commit.hash` 40 chars here but 12 chars on a later `GET`). `close_source_branch: true` deleted the branch. | Always send `close_source_branch` explicitly (`true` only with `-d`): when omitted Bitbucket falls back to the PR's create-time value, which would delete a branch implicitly (spec §9). |
+| Merge, async | `?async=true` → **202**, body `""`, `Location: …/merge/task-status/<uuid>`. Polling gives `{task_status: PENDING\|SUCCESS, merge_result: <PR>}`. A merge that fails in the task (conflicts) → task-status **400** with the same error as sync. An **unknown task id → 200 PENDING forever**. | `pr merge` always calls `?async=true` and polls task-status with the 2-minute deadline of spec §7.1 — one code path for fast and slow merges, and a sync 555 timeout leaves the merge state unknown. Never poll without a deadline. |
+| Merge errors | Invalid strategy → 400 `fields.merge_strategy`. Already merged/declined → 400 `fields.newstatus` "already closed". Fast-forward not possible → 400 "Unable to fast forward due to changes in the destination branch." Conflicts → 400 "You can't merge until you resolve all merge conflicts." | Exit 1 with the API message; check `mergeability/checks` first to give a better error. |
+| Mergeability | `GET …/mergeability/checks` → `{size, values: [{type, status: PASSED\|FAILED, required, blocking, reason, state?}]}`. Types seen: `pullrequest_state_check`, `current_user_permission_check`, `git_mergeability_check` (`reason: clean\|conflicts`, `blocking: true` on conflict). | `pr merge` pre-checks it and fails fast on any `blocking` check. |
+| Merge strategies | Not in the default PR payload. `GET …/pullrequests/{id}?fields=%2Bdestination.branch.merge_strategies,%2Bdestination.branch.default_merge_strategy` adds `merge_strategies` (allowed list) and `default_merge_strategy`. The merge body's own default is `merge_commit`, which may differ from the repository's default. `branching-model/settings` needs `repository:admin` (403). | `pr merge` without a strategy flag sends the PR's `default_merge_strategy`; a flag outside `merge_strategies` fails before the request with the allowed list. |
+| HTML error pages | `GET repositories/{ws}/{missing-repo}/commits/<rev>` → **404 `text/html`**, a ~25 KB web page that embeds the caller's profile data and a short-lived web token. Other paths on a missing repo return JSON 404s. | **Never print a non-JSON error body** (Plan 2b, first task): `khbb api` and the error renderer drop `text/html` bodies and print a one-line note instead. |
+| Error hint | For field errors the hint repeats the message verbatim. | Cosmetic; drop the hint when it equals the message. |
+
