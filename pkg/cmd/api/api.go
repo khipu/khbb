@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/jq"
@@ -64,7 +63,7 @@ The default method is GET, or POST when fields or --input are given. With GET, f
 are sent as query parameters; otherwise they form a JSON object body.
 
   -f key=value   adds a string field
-  -F key=value   adds a typed field: true, false, null and integers are converted;
+  -F key=value   adds a typed field: true, false, null and numbers are converted;
                  @file reads the value from a file, @- from standard input`,
 		Example: `  $ khbb api user
   $ khbb api 'repositories/{workspace}/{repo}/pullrequests' --paginate --jq '.[].title'
@@ -173,18 +172,18 @@ func apiRun(ctx context.Context, opts *APIOptions) error {
 		writeHeaders(opts.IO.Out, resp)
 	}
 	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
-	if err := writeBody(opts, resp.Header.Get("Content-Type"), data, ok); err != nil {
-		return err
-	}
 	if !ok {
+		_ = writeBody(opts, resp.Header.Get("Content-Type"), data, false)
 		return bitbucket.ParseHTTPError(resp, data)
 	}
-	return nil
+	return writeBody(opts, resp.Header.Get("Content-Type"), data, true)
 }
 
 func paginate(ctx context.Context, client *bitbucket.Client, path string, header http.Header, opts *APIOptions) error {
 	all := []json.RawMessage{}
+	pageNumber := 0
 	for next := path; next != ""; {
+		pageNumber++
 		resp, err := client.Request(ctx, http.MethodGet, next, header, nil)
 		if err != nil {
 			return err
@@ -203,8 +202,13 @@ func paginate(ctx context.Context, client *bitbucket.Client, path string, header
 			Next   string            `json:"next"`
 		}
 		if err := json.Unmarshal(data, &page); err != nil || page.Values == nil {
-			// Not a paginated collection: print it as is.
-			return writeBody(opts, resp.Header.Get("Content-Type"), data, true)
+			// Not a paginated collection.
+			if pageNumber == 1 {
+				// First page: pass it through.
+				return writeBody(opts, resp.Header.Get("Content-Type"), data, true)
+			}
+			// Later page: error.
+			return fmt.Errorf("page %d of %s is not a paginated collection", pageNumber, path)
 		}
 		all = append(all, page.Values...)
 		next = page.Next
@@ -285,7 +289,8 @@ func typedValue(v string, stdin io.Reader) (any, error) {
 	case "null":
 		return nil, nil
 	}
-	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+	var n json.Number
+	if err := json.Unmarshal([]byte(v), &n); err == nil {
 		return n, nil
 	}
 	if strings.HasPrefix(v, "@") {

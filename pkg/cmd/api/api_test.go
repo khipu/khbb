@@ -86,6 +86,30 @@ func TestAPI_FieldsMakeJSONPost(t *testing.T) {
 	}
 }
 
+func TestAPI_TypedFieldNumbers(t *testing.T) {
+	opts, reg, _, _ := newOpts(t)
+	opts.Path = "repositories/{workspace}/{repo}/pullrequests"
+	opts.TypedFields = []string{"ratio=1.5", "count=3", "code=007"}
+	reg.Register("POST", prs, httpmock.JSONResponse(201, `{}`))
+
+	if err := apiRun(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(reg.Calls[0].Body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if ratio, ok := body["ratio"].(float64); !ok || ratio != 1.5 {
+		t.Errorf("ratio = %v (expected float64 1.5)", body["ratio"])
+	}
+	if count, ok := body["count"].(float64); !ok || count != 3 {
+		t.Errorf("count = %v (expected float64 3)", body["count"])
+	}
+	if code, ok := body["code"].(string); !ok || code != "007" {
+		t.Errorf("code = %v (expected string \"007\")", body["code"])
+	}
+}
+
 func TestAPI_GETFieldsBecomeQuery(t *testing.T) {
 	opts, reg, _, _ := newOpts(t)
 	opts.Path = "repositories/{workspace}/{repo}/pullrequests"
@@ -175,6 +199,25 @@ func TestAPI_PaginateNonPaginatedPassesThrough(t *testing.T) {
 	}
 	if out.String() != `{"nickname":"ada"}` {
 		t.Errorf("out = %q", out.String())
+	}
+}
+
+func TestAPI_PaginateRejectsNonCollectionLaterPage(t *testing.T) {
+	opts, reg, _, out := newOpts(t)
+	opts.Path = "repositories/{workspace}/{repo}/pullrequests"
+	opts.Paginate = true
+	reg.Register("GET", prs, httpmock.JSONResponse(200, `{"values":[{"id":1}],"next":"https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests?page=2"}`))
+	reg.Register("GET", prs, httpmock.JSONResponse(200, `{"nickname":"ada"}`))
+
+	err := apiRun(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for non-collection on page 2")
+	}
+	if !strings.Contains(err.Error(), "page 2") {
+		t.Errorf("error should mention page 2, got: %v", err)
+	}
+	if out.String() != "" {
+		t.Errorf("stdout should be empty, got %q", out.String())
 	}
 }
 
