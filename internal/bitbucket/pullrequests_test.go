@@ -91,15 +91,47 @@ func TestListPullRequests_SingleStateWithQuery(t *testing.T) {
 	}
 }
 
-func TestListPullRequests_DefaultsToPagelenOnly(t *testing.T) {
+func TestListPullRequests_Defaults(t *testing.T) {
 	c, reg := newTestClient(t, bitbucket.Options{})
 	reg.Register("GET", prPath, httpmock.JSONResponse(200, `{"values":[]}`))
 	prs, err := c.ListPullRequests(context.Background(), "acme", "widgets", bitbucket.PRListOptions{}, 0)
 	if err != nil || len(prs) != 0 {
 		t.Fatalf("prs %v err %v", prs, err)
 	}
-	if got := reg.Calls[0].URL.RawQuery; got != "pagelen=50" {
-		t.Errorf("query = %q", got)
+	q := reg.Calls[0].URL.Query()
+	if !slices.Equal(q["state"], []string{"OPEN"}) || q.Get("sort") != "-updated_on" || q.Get("pagelen") != "50" || q.Get("q") != "" {
+		t.Errorf("query = %v", q)
+	}
+}
+
+func TestListPullRequests_QueryWithoutStatesMeansOpen(t *testing.T) {
+	c, reg := newTestClient(t, bitbucket.Options{})
+	reg.Register("GET", prPath, httpmock.JSONResponse(200, `{"values":[]}`))
+	_, err := c.ListPullRequests(context.Background(), "acme", "widgets", bitbucket.PRListOptions{
+		Query: `a = "b"`,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := reg.Calls[0].URL.Query()
+	if q.Get("q") != `state = "OPEN" AND (a = "b")` || len(q["state"]) != 0 {
+		t.Errorf("query = %v", q)
+	}
+}
+
+func TestListPullRequests_AllStatesWithQuery(t *testing.T) {
+	c, reg := newTestClient(t, bitbucket.Options{})
+	reg.Register("GET", prPath, httpmock.JSONResponse(200, `{"values":[]}`))
+	_, err := c.ListPullRequests(context.Background(), "acme", "widgets", bitbucket.PRListOptions{
+		States: []string{"OPEN", "MERGED", "DECLINED", "SUPERSEDED"}, Query: `a = "b"`,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := reg.Calls[0].URL.Query()
+	want := `(state = "OPEN" OR state = "MERGED" OR state = "DECLINED" OR state = "SUPERSEDED") AND (a = "b")`
+	if q.Get("q") != want || len(q["state"]) != 0 {
+		t.Errorf("query = %v", q)
 	}
 }
 

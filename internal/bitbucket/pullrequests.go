@@ -79,6 +79,7 @@ type Comment struct {
 	Parent *struct {
 		ID int `json:"id"`
 	} `json:"parent"`
+	Pending   bool      `json:"pending"`
 	Deleted   bool      `json:"deleted"`
 	CreatedOn time.Time `json:"created_on"`
 	UpdatedOn time.Time `json:"updated_on"`
@@ -113,25 +114,28 @@ type DiffStat struct {
 
 // PRListOptions filters ListPullRequests.
 type PRListOptions struct {
-	States           []string // OPEN, MERGED, DECLINED, SUPERSEDED. With Query they are folded into the BBQL (Bitbucket ignores state= when q is set); empty means no state filter with Query, or Bitbucket's default (OPEN) without.
+	States           []string // OPEN, MERGED, DECLINED, SUPERSEDED; empty means OPEN. With Query they are folded into the BBQL (Bitbucket ignores state= when q is set).
 	Query            string   // BBQL expression
 	WithParticipants bool     // include reviewers and participants in each item
 }
 
 // ListPullRequests lists a repository's pull requests (limit <= 0 means all).
 func (c *Client) ListPullRequests(ctx context.Context, workspace, slug string, opts PRListOptions, limit int) ([]PullRequest, error) {
+	states := opts.States
+	if len(states) == 0 {
+		states = []string{"OPEN"}
+	}
 	q := url.Values{}
 	switch {
-	case opts.Query != "" && len(opts.States) > 0:
-		// Bitbucket ignores the state parameter whenever q is present, so the states go into the BBQL.
-		q.Set("q", stateClause(opts.States)+" AND ("+opts.Query+")")
 	case opts.Query != "":
-		q.Set("q", opts.Query)
+		// Bitbucket ignores the state parameter whenever q is present, so the states go into the BBQL.
+		q.Set("q", stateClause(states)+" AND ("+opts.Query+")")
 	default:
-		for _, s := range opts.States {
+		for _, s := range states {
 			q.Add("state", s)
 		}
 	}
+	q.Set("sort", "-updated_on")
 	if opts.WithParticipants {
 		q.Set("fields", "+values.participants,+values.reviewers")
 	}
