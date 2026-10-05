@@ -22,6 +22,9 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 	cmd.SetOut(f.IOStreams.Out)
 	cmd.SetErr(f.IOStreams.ErrOut)
 	cmd.CompletionOptions.HiddenDefaultCmd = true
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &cmdutil.FlagError{Err: err}
+	})
 
 	cmd.AddCommand(versionCmd.NewCmdVersion(f))
 	return cmd
