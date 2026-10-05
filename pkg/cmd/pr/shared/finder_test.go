@@ -35,6 +35,7 @@ func TestParseSelector(t *testing.T) {
 		{in: "0", bad: true},
 		{in: "-3", bad: true},
 		{in: "https://github.com/a/b/pull/1", bad: true},
+		{in: "https://bitbucket.org/other/tools/pull-requests/0", bad: true},
 	}
 	for _, tc := range cases {
 		id, repo, err := shared.ParseSelector(tc.in)

@@ -27,6 +27,9 @@ func ParseSelector(s string) (int, *gitctx.Repo, error) {
 			return 0, nil, cmdutil.FlagErrorf("invalid pull request URL %q", s)
 		}
 		id, _ := strconv.Atoi(m[3])
+		if id <= 0 {
+			return 0, nil, cmdutil.FlagErrorf("invalid pull request URL %q", s)
+		}
 		return id, &repo, nil
 	}
 	id, err := strconv.Atoi(strings.TrimPrefix(s, "#"))
