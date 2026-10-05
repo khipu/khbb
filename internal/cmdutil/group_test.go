@@ -25,7 +25,7 @@ func TestGroupRunE_UnknownSubcommandIsFlagError(t *testing.T) {
 func TestGroupRunE_NoArgsShowsHelp(t *testing.T) {
 	var helped bool
 	cmd := &cobra.Command{
-		Use: "auth",
+		Use:  "auth",
 		RunE: func(*cobra.Command, []string) error { return nil },
 	}
 	cmd.SetHelpFunc(func(*cobra.Command, []string) { helped = true })
