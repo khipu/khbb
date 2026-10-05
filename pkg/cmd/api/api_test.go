@@ -310,6 +310,8 @@ func TestNewCmdAPI_Validation(t *testing.T) {
 		{"--jq", ".", "--template", "{{.}}", "user"},
 		{"--include", "--paginate", "user"},
 		{"-f", "novalue", "user"},
+		{"--jq", ".[", "user"},
+		{"-X", "POST", "--template", "{{", "user"},
 	}
 	for _, args := range cases {
 		ios, _, _, _ := iostreams.Test()

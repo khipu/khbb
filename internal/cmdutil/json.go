@@ -62,6 +62,12 @@ func AddJSONFlags(cmd *cobra.Command, exporter *Exporter, fields []string) {
 		if jqExpr != "" && tmpl != "" {
 			return FlagErrorf("cannot use --jq and --template together")
 		}
+		if err := ValidateJQ(jqExpr); err != nil {
+			return err
+		}
+		if err := ValidateTemplate(tmpl); err != nil {
+			return err
+		}
 		requested, _ := flags.GetStringSlice("json")
 		if len(requested) == 0 {
 			return FlagErrorf("specify one or more comma-separated fields for `--json`:\n%s", fieldList(fields))

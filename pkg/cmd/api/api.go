@@ -111,6 +111,12 @@ func validateFlags(opts *APIOptions) error {
 	case opts.JQ != "" && opts.Template != "":
 		return cmdutil.FlagErrorf("cannot use --jq and --template together")
 	}
+	if err := cmdutil.ValidateJQ(opts.JQ); err != nil {
+		return err
+	}
+	if err := cmdutil.ValidateTemplate(opts.Template); err != nil {
+		return err
+	}
 	return validateFields(opts)
 }
 

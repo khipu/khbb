@@ -164,3 +164,19 @@ func TestJSON_AddJSONFlagsSkipsTakenShorthand(t *testing.T) {
 		t.Errorf("out = %q, want %q (--template should still work long-only)", out.String(), "#1#2")
 	}
 }
+
+func TestJSON_InvalidFiltersAreRejectedBeforeRunning(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--json", "id", "--jq", ".["}, "invalid --jq expression"},
+		{[]string{"--json", "id", "--template", "{{"}, "invalid --template"},
+	} {
+		_, err := runJSON(t, samples, tc.args...)
+		var flagErr *cmdutil.FlagError
+		if !errors.As(err, &flagErr) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%v: err = %v", tc.args, err)
+		}
+	}
+}
