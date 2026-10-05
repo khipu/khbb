@@ -15,6 +15,8 @@ func NewCmdAuth(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth <command>",
 		Short: "Authenticate khbb with Bitbucket Cloud",
+		Args:  cobra.ArbitraryArgs,
+		RunE:  cmdutil.GroupRunE,
 	}
 	cmd.AddCommand(
 		login.NewCmdLogin(f, nil),

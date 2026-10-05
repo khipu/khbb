@@ -32,3 +32,14 @@ func TestRootUnknownFlagIsUsageError(t *testing.T) {
 		t.Fatalf("expected FlagError, got %T: %v", err, err)
 	}
 }
+
+func TestRootMistypedSubcommandIsUsageError(t *testing.T) {
+	ios, _, _, _ := iostreams.Test()
+	cmd := root.NewCmdRoot(&cmdutil.Factory{AppVersion: "1.2.3", IOStreams: ios})
+	cmd.SetArgs([]string{"auth", "stauts"})
+	err := cmd.Execute()
+	var flagErr *cmdutil.FlagError
+	if !errors.As(err, &flagErr) {
+		t.Fatalf("expected FlagError, got %T: %v", err, err)
+	}
+}
