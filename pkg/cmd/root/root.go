@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/khipu/khbb/internal/cmdutil"
+	authCmd "github.com/khipu/khbb/pkg/cmd/auth"
 	versionCmd "github.com/khipu/khbb/pkg/cmd/version"
 )
 
@@ -26,6 +27,9 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		return &cmdutil.FlagError{Err: err}
 	})
 
-	cmd.AddCommand(versionCmd.NewCmdVersion(f))
+	cmd.AddCommand(
+		authCmd.NewCmdAuth(f),
+		versionCmd.NewCmdVersion(f),
+	)
 	return cmd
 }
