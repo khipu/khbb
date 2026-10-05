@@ -70,3 +70,15 @@ func TestSharedFlagsBindToFactory(t *testing.T) {
 		t.Errorf("RepoOverride=%q DryRun=%v yes=%v", f.RepoOverride, f.DryRun, yes)
 	}
 }
+
+func TestBaseRepo_InvalidEnvNamesVariable(t *testing.T) {
+	t.Setenv("KHBB_REPO", "widgets")
+	_, err := (&cmdutil.Factory{}).BaseRepo()
+	if err == nil || !strings.Contains(err.Error(), "KHBB_REPO") || !strings.Contains(err.Error(), "WORKSPACE/REPO") {
+		t.Fatalf("err = %v", err)
+	}
+	var flagErr *cmdutil.FlagError
+	if errors.As(err, &flagErr) {
+		t.Error("a malformed KHBB_REPO is an environment error, not a usage error")
+	}
+}
