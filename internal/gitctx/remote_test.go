@@ -46,7 +46,7 @@ func TestParseRepo(t *testing.T) {
 	if err != nil || r.FullName() != "acme/widgets" {
 		t.Errorf("ParseRepo = %v, %v", r, err)
 	}
-	for _, bad := range []string{"", "acme", "acme/", "/widgets", "a/b/c"} {
+	for _, bad := range []string{"", "acme", "acme/", "/widgets", "a/b/c", "acme/wid gets", "acme/..", "acme/w?x", "acme/w#x", "../widgets"} {
 		if _, err := ParseRepo(bad); err == nil {
 			t.Errorf("ParseRepo(%q): expected error", bad)
 		}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2/terminal"
@@ -114,7 +116,20 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 	if info.Hint == "" && e.Detail != "" {
 		info.Hint = e.Detail
 	}
+	if info.Hint == "" && len(e.Fields) > 0 {
+		info.Hint = formatFields(e.Fields)
+	}
 	return info
+}
+
+// formatFields renders Bitbucket field errors as "field: msg, msg; other: msg", sorted by field.
+func formatFields(fields map[string][]string) string {
+	keys := slices.Sorted(maps.Keys(fields))
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+": "+strings.Join(fields[k], ", "))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // PrintError reports err on stderr (as one JSON line when asJSON) and returns the exit code.

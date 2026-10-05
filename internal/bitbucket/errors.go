@@ -15,6 +15,8 @@ type HTTPError struct {
 	Message        string
 	Detail         string
 	RequiredScopes []string
+	// Fields holds per-field validation messages from Bitbucket's error.fields.
+	Fields map[string][]string
 }
 
 func (e *HTTPError) Error() string {
@@ -43,13 +45,15 @@ func ParseHTTPError(resp *http.Response, body []byte) *HTTPError {
 	}
 	var payload struct {
 		Error struct {
-			Message string          `json:"message"`
-			Detail  json.RawMessage `json:"detail"`
+			Message string                     `json:"message"`
+			Detail  json.RawMessage            `json:"detail"`
+			Fields  map[string]json.RawMessage `json:"fields"`
 		} `json:"error"`
 	}
 	if json.Unmarshal(body, &payload) == nil {
 		e.Message = payload.Error.Message
 		e.Detail, e.RequiredScopes = parseDetail(payload.Error.Detail)
+		e.Fields = parseFields(payload.Error.Fields)
 	}
 	return e
 }
@@ -74,4 +78,26 @@ func parseDetail(raw json.RawMessage) (string, []string) {
 	}
 	_ = json.Unmarshal(raw, &obj)
 	return string(raw), obj.Required
+}
+
+// parseFields accepts each field's messages as a list of strings or a single string.
+func parseFields(raw map[string]json.RawMessage) map[string][]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(raw))
+	for k, v := range raw {
+		var list []string
+		if json.Unmarshal(v, &list) == nil {
+			out[k] = list
+			continue
+		}
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			out[k] = []string{s}
+			continue
+		}
+		out[k] = []string{string(v)}
+	}
+	return out
 }
