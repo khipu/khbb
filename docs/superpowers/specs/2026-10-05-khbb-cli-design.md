@@ -459,7 +459,8 @@ as "keep polling" with backoff, up to 5 consecutive failures.
 ## 14. Items to verify during implementation
 
 Each of these has a defined fallback in this spec; verification decides which path
-is built.
+is built. Results are tracked in
+[`2026-10-05-bitbucket-api-findings.md`](2026-10-05-bitbucket-api-findings.md).
 
 1. Whether `POST /pullrequests` adds default reviewers automatically (§7.1).
 2. PR `draft` support in the Cloud REST API (§7.1).
