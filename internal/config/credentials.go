@@ -48,14 +48,17 @@ var (
 
 // withKeyringTimeout runs call in a goroutine and returns ErrKeyringTimeout if it has
 // not finished within keyringTimeout. The goroutine is left to finish (or hang) on its
-// own; the result channel is buffered so it never blocks.
+// own; the result channel is buffered so it never blocks. keyringTimeout is read once,
+// up front, so a later change to it (tests restoring it after a timeout) can't race with
+// this read.
 func withKeyringTimeout(call func() error) error {
+	timeout := keyringTimeout
 	done := make(chan error, 1)
 	go func() { done <- call() }()
 	select {
 	case err := <-done:
 		return err
-	case <-time.After(keyringTimeout):
+	case <-time.After(timeout):
 		return ErrKeyringTimeout
 	}
 }
@@ -82,8 +85,13 @@ func ResolveCredentials(cfg *Config) (Credentials, error) {
 		return Credentials{Email: cfg.Email, Token: cfg.InsecureToken, Source: SourceFile}, nil
 	}
 	var token string
+	// Capture the current function value before spawning the goroutine: the goroutine
+	// may still be running (abandoned, on a timeout) after this call returns, and must
+	// never read the keyringGet package variable again once that happens, or it would
+	// race with a test restoring it.
+	get := keyringGet
 	err := withKeyringTimeout(func() error {
-		t, err := keyringGet(KeyringService, cfg.Email)
+		t, err := get(KeyringService, cfg.Email)
 		token = t
 		return err
 	})
@@ -98,12 +106,16 @@ func ResolveCredentials(cfg *Config) (Credentials, error) {
 
 // StoreToken saves token in the system keyring.
 func StoreToken(email, token string) error {
-	return withKeyringTimeout(func() error { return keyringSet(KeyringService, email, token) })
+	// See the comment in ResolveCredentials: capture before spawning.
+	set := keyringSet
+	return withKeyringTimeout(func() error { return set(KeyringService, email, token) })
 }
 
 // DeleteToken removes the keyring entry for email. A missing entry is not an error.
 func DeleteToken(email string) error {
-	err := withKeyringTimeout(func() error { return keyringDelete(KeyringService, email) })
+	// See the comment in ResolveCredentials: capture before spawning.
+	del := keyringDelete
+	err := withKeyringTimeout(func() error { return del(KeyringService, email) })
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil
 	}

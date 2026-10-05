@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,20 +24,52 @@ func newConfig(t *testing.T) *Config {
 }
 
 // blockingKeyring replaces keyringGet/keyringSet/keyringDelete with functions that
-// block until the test ends, and shortens keyringTimeout so tests run fast. Everything
-// is restored in t.Cleanup.
-func blockingKeyring(t *testing.T) {
+// block until the test ends, and shortens keyringTimeout so tests run fast. Production
+// code abandons the goroutine calling these on a timeout, so Cleanup must wait for it to
+// actually return before restoring the package vars underneath it - otherwise the
+// restore races with whichever stub is still running.
+//
+// expectCall says whether the code under test will actually invoke one of the three
+// stubs. The wait group's Add must happen here, synchronously, before the caller goes on
+// to invoke ResolveCredentials/StoreToken/DeleteToken (and so before the goroutine that
+// might call a stub even exists): adding from inside the stub instead would race with
+// Cleanup's Wait, since nothing orders "the abandoned goroutine reaches the stub" before
+// "Cleanup runs" other than wall-clock timing, which the race detector rightly does not
+// trust. Callers must not use t.Parallel(): only one such swap can be live at a time.
+func blockingKeyring(t *testing.T, expectCall bool) {
 	t.Helper()
 	origGet, origSet, origDelete, origTimeout := keyringGet, keyringSet, keyringDelete, keyringTimeout
 	block := make(chan struct{})
+	var wg sync.WaitGroup
+	if expectCall {
+		wg.Add(1)
+	}
+	done := func() {
+		if expectCall {
+			wg.Done()
+		}
+	}
+	keyringTimeout = 50 * time.Millisecond
+	keyringGet = func(string, string) (string, error) {
+		defer done()
+		<-block
+		return "", nil
+	}
+	keyringSet = func(string, string, string) error {
+		defer done()
+		<-block
+		return nil
+	}
+	keyringDelete = func(string, string) error {
+		defer done()
+		<-block
+		return nil
+	}
 	t.Cleanup(func() {
 		close(block)
+		wg.Wait()
 		keyringGet, keyringSet, keyringDelete, keyringTimeout = origGet, origSet, origDelete, origTimeout
 	})
-	keyringTimeout = 50 * time.Millisecond
-	keyringGet = func(string, string) (string, error) { <-block; return "", nil }
-	keyringSet = func(string, string, string) error { <-block; return nil }
-	keyringDelete = func(string, string) error { <-block; return nil }
 }
 
 func TestResolve_EnvWins(t *testing.T) {
@@ -132,7 +165,7 @@ func TestResolve_FileTokenSkipsKeyring(t *testing.T) {
 	cfg := newConfig(t)
 	cfg.Email = "dev@example.com"
 	cfg.InsecureToken = "plain"
-	blockingKeyring(t)
+	blockingKeyring(t, false) // the file token must short-circuit before any keyring call
 
 	got, err := ResolveCredentials(cfg)
 	if err != nil {
@@ -185,7 +218,7 @@ func TestResolve_KeyringErrorSurfacesInsteadOfNoCredentials(t *testing.T) {
 func TestResolve_KeyringTimeoutSurfacesError(t *testing.T) {
 	cfg := newConfig(t)
 	cfg.Email = "dev@example.com"
-	blockingKeyring(t)
+	blockingKeyring(t, true)
 
 	_, err := ResolveCredentials(cfg)
 	if !errors.Is(err, ErrKeyringTimeout) {
@@ -198,7 +231,7 @@ func TestResolve_KeyringTimeoutSurfacesError(t *testing.T) {
 
 func TestStoreToken_KeyringTimeout(t *testing.T) {
 	newConfig(t)
-	blockingKeyring(t)
+	blockingKeyring(t, true)
 	if err := StoreToken("dev@example.com", "s3cret"); !errors.Is(err, ErrKeyringTimeout) {
 		t.Errorf("err = %v, want ErrKeyringTimeout", err)
 	}
@@ -206,7 +239,7 @@ func TestStoreToken_KeyringTimeout(t *testing.T) {
 
 func TestDeleteToken_KeyringTimeout(t *testing.T) {
 	newConfig(t)
-	blockingKeyring(t)
+	blockingKeyring(t, true)
 	if err := DeleteToken("dev@example.com"); !errors.Is(err, ErrKeyringTimeout) {
 		t.Errorf("err = %v, want ErrKeyringTimeout", err)
 	}
