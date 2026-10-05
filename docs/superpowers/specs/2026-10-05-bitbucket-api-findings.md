@@ -75,3 +75,18 @@ Khipu repository with recent pipelines and pull requests.
 | — | Maximum `pagelen` | `pullrequests`: 50 (`pagelen=100` → 400 `Invalid pagelen`). `pipelines`: 100. `workspaces/{ws}/members`: 100. `effective-default-reviewers`: 100. `pipelines/{n}/steps`: ignores `pagelen` (returns all steps). | Keep the client default of 50; Plans 2–3 need no per-endpoint override. |
 | — | Pipeline/step state shape (complements #7) | Completed pipelines: `state.name = COMPLETED`, `state.result.name ∈ {SUCCESSFUL, FAILED}` observed, `state.stage = null`. Steps: `state.name` + `state.result.name`. | Matches the OpenAPI-derived mapping in #7. |
 | — | Step log endpoint | With `Accept: application/json` or `text/plain` → **406 Not Acceptable**. With `Accept: application/octet-stream` or `*/*` → 200. The body is served through a redirect (final response over HTTP/1.1) and was ~1.2 MB for a three-step pipeline. | Plan 3: request logs with `Accept: application/octet-stream`; replace the 30 s whole-request `http.Client.Timeout` with transport-level timeouts so large logs are not cut off (final-review Minor #9). |
+
+## Pull request API (Source B, for Plan 2)
+
+Verified 2026-10-05 with read-only `khbb api` requests. Shapes and status codes only.
+
+| Topic | Finding | Decision |
+|---|---|---|
+| List vs. single PR | `GET …/pullrequests` items omit `participants` and `reviewers`; `GET …/pullrequests/{id}` includes them. `fields=+values.participants,+values.reviewers` (the `+` URL-encoded as `%2B`) adds them to list items. | List commands request them only when the output needs them. |
+| PR fields | `id, title, description, state, draft, author, source{branch{name}, commit{hash}, repository{full_name}}, destination{…}, merge_commit{hash}\|null, reviewers[], participants[{user, role: REVIEWER\|PARTICIPANT, approved, state: approved\|changes_requested\|null}], comment_count, task_count, close_source_branch, closed_by, created_on, updated_on, links.html.href, summary.raw`. | Mapped to the spec §8.1 PullRequest shape. |
+| State filter | Repeated `state=` parameters are ORed (`state=OPEN&state=MERGED&…`); without `state` only OPEN PRs are returned; `q=` is ANDed with them. | `pr list --state all` sends all four states. |
+| BBQL filters | Supported: `source.branch.name`, `destination.branch.name`, `author.uuid`, `author.nickname`, `author.account_id`, `reviewers.uuid`, `reviewers.nickname`, `reviewers.account_id`, `title ~`, `state`, `draft`. `participants.*` → 400 "does not support filtering". | `--author`/`--reviewer` accept `@me`, `{uuid}`, account ID or nickname without a member lookup. |
+| Comments | Items: `id, content{raw}, user, inline{path, from, to}\|absent, parent{id}\|absent, deleted, pending, created_on, updated_on, links`. | Comment shape: `line` = `inline.to`, else `inline.from`. |
+| Commit statuses | `GET …/pullrequests/{id}/statuses` items: `key, name, state (SUCCESSFUL observed), description, url, updated_on, refname, commit`. Older PRs may have none. | `pr checks` with no statuses exits 0 with a notice. |
+| Diff / patch | `…/diff` and `…/patch` answer 200 with `Accept` `application/json`, `text/plain` or `*/*`. `…/diffstat` items: `status, lines_added, lines_removed, old{path}\|null, new{path}\|null`. | Text endpoints are fetched with `Accept: */*` (works here and for logs). |
+| `pagelen` | `statuses`, `diffstat` and `comments` accept 50. | Client default 50 is safe. |
