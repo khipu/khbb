@@ -101,7 +101,8 @@ func diffRun(ctx context.Context, opts *DiffOptions) error {
 	if err != nil {
 		return err
 	}
-	if !(opts.Color == "always" || (opts.Color == "auto" && opts.IO.ColorEnabled())) {
+	colorize := opts.Color == "always" || (opts.Color == "auto" && opts.IO.ColorEnabled())
+	if !colorize {
 		_, err := io.WriteString(opts.IO.Out, text)
 		return err
 	}
