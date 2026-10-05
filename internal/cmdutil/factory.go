@@ -19,6 +19,11 @@ type Prompter interface {
 	Confirm(prompt string, defaultValue bool) (bool, error)
 }
 
+// Browser opens web pages for --web.
+type Browser interface {
+	Browse(url string) error
+}
+
 // Factory provides commands with their dependencies. Function fields are lazy so that
 // commands which do not need the network or a repository never touch them.
 type Factory struct {
@@ -28,6 +33,7 @@ type Factory struct {
 
 	IOStreams *iostreams.IOStreams
 	Prompter  Prompter
+	Browser   Browser
 	Git       *gitctx.Resolver
 
 	Config     func() (*config.Config, error)

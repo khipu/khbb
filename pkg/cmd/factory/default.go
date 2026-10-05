@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 
+	cliBrowser "github.com/cli/browser"
+	"github.com/cli/go-gh/v2/pkg/browser"
 	"github.com/cli/go-gh/v2/pkg/prompter"
 
 	"github.com/khipu/khbb/internal/bitbucket"
@@ -30,6 +32,7 @@ func New(version, commit, date string) *cmdutil.Factory {
 		Git:      gitctx.NewResolver(""),
 	}
 	f.Config = cachedConfig()
+	f.Browser = &browserLauncher{f: f}
 	f.HTTPClient = func() (*bitbucket.Client, error) { return newClient(f) }
 	return f
 }
@@ -72,4 +75,29 @@ func newClient(f *cmdutil.Factory) (*bitbucket.Client, error) {
 		opts.Debug = f.IOStreams.ErrOut
 	}
 	return bitbucket.New(opts), nil
+}
+
+// browserLauncher opens URLs with the config `browser`, then $BROWSER, then the system default.
+// Unlike go-gh's default resolution, it never reads GitHub CLI settings.
+type browserLauncher struct{ f *cmdutil.Factory }
+
+func (b *browserLauncher) Browse(url string) error {
+	var configured string
+	if cfg, err := b.f.Config(); err == nil {
+		configured = cfg.Browser
+	}
+	launcher := resolveLauncher(configured)
+	if launcher == "" {
+		cliBrowser.Stdout = b.f.IOStreams.ErrOut
+		cliBrowser.Stderr = b.f.IOStreams.ErrOut
+		return cliBrowser.OpenURL(url)
+	}
+	return browser.New(launcher, b.f.IOStreams.ErrOut, b.f.IOStreams.ErrOut).Browse(url)
+}
+
+func resolveLauncher(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	return os.Getenv("BROWSER")
 }
