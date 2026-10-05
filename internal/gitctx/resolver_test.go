@@ -69,8 +69,12 @@ func TestBaseRepo_NoBitbucketRemote(t *testing.T) {
 
 func TestBaseRepo_NotAGitRepository(t *testing.T) {
 	r := &gitctx.Resolver{Git: func(...string) (string, error) { return "", errors.New("not a git repository") }}
-	if _, err := r.BaseRepo(); !errors.Is(err, gitctx.ErrNoRepo) {
+	_, err := r.BaseRepo()
+	if !errors.Is(err, gitctx.ErrNoRepo) {
 		t.Errorf("expected ErrNoRepo, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "not a git repository") {
+		t.Errorf("expected error message to contain 'not a git repository', got %v", err)
 	}
 }
 

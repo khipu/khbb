@@ -52,7 +52,7 @@ func (r *Resolver) Remotes() ([]Remote, error) {
 func (r *Resolver) BaseRepo() (Repo, error) {
 	remotes, err := r.Remotes()
 	if err != nil {
-		return Repo{}, ErrNoRepo
+		return Repo{}, fmt.Errorf("%w (%v)", ErrNoRepo, err)
 	}
 	var found []Repo
 	for _, rem := range remotes {
