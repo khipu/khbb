@@ -56,15 +56,20 @@ func pipeline(n int, state, target, trigger string) string {
 		n, n, state, target, trigger, prtest.Ada, completed, duration)
 }
 
-// Step returns a step with the given UUID, name and state. Steps that ran took 12 s.
+// Step returns a step with the given UUID, name and state. Steps that ran took 12 s. A NOT_RUN step
+// gets completed_on set but no started_on, matching what Bitbucket sends for a skipped step.
 func Step(uuid, name, state string) string {
-	ran := !strings.Contains(state, `"PENDING"`) && !strings.Contains(state, "NOT_RUN")
+	notRun := strings.Contains(state, "NOT_RUN")
+	ran := !strings.Contains(state, `"PENDING"`) && !notRun
 	started, completed, duration := "null", "null", 0
 	if ran {
 		started = `"2026-10-06T12:00:05.000000+00:00"`
 	}
 	if ran && strings.Contains(state, "COMPLETED") {
 		completed, duration = `"2026-10-06T12:00:17.000000+00:00"`, 12
+	}
+	if notRun {
+		completed = `"2026-10-06T12:00:17.000000+00:00"`
 	}
 	return fmt.Sprintf(`{"uuid":"%s","name":"%s","state":%s,"started_on":%s,"completed_on":%s,"duration_in_seconds":%d,`+
 		`"trigger":{"type":"pipeline_step_trigger_automatic"}}`, uuid, name, state, started, completed, duration)

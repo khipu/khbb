@@ -112,7 +112,7 @@ func printChanges(w io.Writer, p Pipeline, steps []Step, seen map[string]string)
 		}
 		seen[s.UUID] = s.Status
 		line := fmt.Sprintf("#%d step %q: %s", p.Number, s.Name, s.Status)
-		if s.CompletedOn != nil {
+		if s.CompletedOn != nil && s.StartedOn != nil {
 			line += " (" + FormatDuration(s.DurationSeconds) + ")"
 		}
 		fmt.Fprintln(w, line)

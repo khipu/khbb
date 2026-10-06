@@ -36,9 +36,12 @@ func poll(reg *httpmock.Registry, state string, steps ...string) {
 
 func TestWatch_PrintsStateChanges(t *testing.T) {
 	reg := httpmock.New(t)
-	poll(reg, ptest.StatePending, ptest.Step("{s1}", "Build", ptest.StatePending), ptest.Step("{s2}", "Test", ptest.StatePending))
-	poll(reg, ptest.StateRunning, ptest.Step("{s1}", "Build", ptest.StepInProgress), ptest.Step("{s2}", "Test", ptest.StatePending))
-	poll(reg, ptest.StateFailed, ptest.Step("{s1}", "Build", ptest.StateSuccessful), ptest.Step("{s2}", "Test", ptest.StateFailed))
+	poll(reg, ptest.StatePending, ptest.Step("{s1}", "Build", ptest.StatePending), ptest.Step("{s2}", "Test", ptest.StatePending),
+		ptest.Step("{s3}", "Deploy", ptest.StepNotRun))
+	poll(reg, ptest.StateRunning, ptest.Step("{s1}", "Build", ptest.StepInProgress), ptest.Step("{s2}", "Test", ptest.StatePending),
+		ptest.Step("{s3}", "Deploy", ptest.StepNotRun))
+	poll(reg, ptest.StateFailed, ptest.Step("{s1}", "Build", ptest.StateSuccessful), ptest.Step("{s2}", "Test", ptest.StateFailed),
+		ptest.Step("{s3}", "Deploy", ptest.StepNotRun))
 	opts, out, slept := watchOptions(reg, false)
 
 	p, steps, err := shared.Watch(context.Background(), opts)
@@ -47,6 +50,7 @@ func TestWatch_PrintsStateChanges(t *testing.T) {
 	}
 	want := `#42 step "Build": pending
 #42 step "Test": pending
+#42 step "Deploy": skipped
 #42 pending
 #42 step "Build": running
 #42 running
@@ -57,7 +61,7 @@ func TestWatch_PrintsStateChanges(t *testing.T) {
 	if out.String() != want {
 		t.Errorf("out = %q, want %q", out.String(), want)
 	}
-	if p.Status != "failed" || len(steps) != 2 || !slices.Equal(*slept, []time.Duration{5 * time.Second, 5 * time.Second}) {
+	if p.Status != "failed" || len(steps) != 3 || !slices.Equal(*slept, []time.Duration{5 * time.Second, 5 * time.Second}) {
 		t.Errorf("p %+v steps %d slept %v", p, len(steps), *slept)
 	}
 	var exitErr *cmdutil.ExitError
