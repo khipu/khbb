@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/khipu/khbb/internal/cmdutil"
+	"github.com/khipu/khbb/pkg/cmd/pr/checkout"
 	"github.com/khipu/khbb/pkg/cmd/pr/checks"
 	"github.com/khipu/khbb/pkg/cmd/pr/comment"
 	"github.com/khipu/khbb/pkg/cmd/pr/create"
@@ -41,6 +42,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 		review.NewCmdRequestChanges(f, nil),
 		merge.NewCmdMerge(f, nil),
 		decline.NewCmdDecline(f, nil),
+		checkout.NewCmdCheckout(f, nil),
 		comment.NewCmdComment(f, nil),
 	)
 	return cmd
