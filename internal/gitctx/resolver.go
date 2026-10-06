@@ -56,16 +56,8 @@ func (r *Resolver) BaseRepo() (Repo, error) {
 	}
 	var found []Repo
 	for _, rem := range remotes {
-		host, repo, isSSH, err := parseRemoteURL(rem.URL)
-		if err != nil {
-			continue
-		}
-		if host != bitbucketHost && isSSH && r.SSHHostname != nil {
-			if real, err := r.SSHHostname(host); err == nil {
-				host = real
-			}
-		}
-		if host != bitbucketHost {
+		repo, ok := r.bitbucketRepo(rem.URL)
+		if !ok {
 			continue
 		}
 		if rem.Name == "origin" {
@@ -77,6 +69,44 @@ func (r *Resolver) BaseRepo() (Repo, error) {
 		return found[0], nil
 	}
 	return Repo{}, ErrNoRepo
+}
+
+// RemoteFor returns the name of a remote that points at repo, preferring "origin", or "" when no
+// remote does.
+func (r *Resolver) RemoteFor(repo Repo) (string, error) {
+	remotes, err := r.Remotes()
+	if err != nil {
+		return "", err
+	}
+	name := ""
+	for _, rem := range remotes {
+		got, ok := r.bitbucketRepo(rem.URL)
+		if !ok || !strings.EqualFold(got.FullName(), repo.FullName()) {
+			continue
+		}
+		if rem.Name == "origin" {
+			return rem.Name, nil
+		}
+		if name == "" {
+			name = rem.Name
+		}
+	}
+	return name, nil
+}
+
+// bitbucketRepo returns the repository a remote URL points at; ok is false for hosts other than
+// bitbucket.org, after resolving SSH host aliases.
+func (r *Resolver) bitbucketRepo(rawURL string) (Repo, bool) {
+	host, repo, isSSH, err := parseRemoteURL(rawURL)
+	if err != nil {
+		return Repo{}, false
+	}
+	if host != bitbucketHost && isSSH && r.SSHHostname != nil {
+		if real, err := r.SSHHostname(host); err == nil {
+			host = real
+		}
+	}
+	return repo, host == bitbucketHost
 }
 
 // CurrentBranch returns the checked-out branch name.

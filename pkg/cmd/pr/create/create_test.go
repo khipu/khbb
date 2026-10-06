@@ -2,6 +2,8 @@ package create
 
 import (
 	"errors"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -193,5 +195,143 @@ func TestCreate_RepoFlagNeedsHead(t *testing.T) {
 	var flagErr *cmdutil.FlagError
 	if !errors.As(err, &flagErr) || !strings.Contains(err.Error(), "--head") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+const originRemotes = "origin\tgit@bitbucket.org:acme/widgets.git (fetch)\norigin\tgit@bitbucket.org:acme/widgets.git (push)"
+
+func gitWith(outputs map[string]string) *prtest.FakeGit {
+	all := map[string]string{
+		"remote -v":                         originRemotes,
+		"symbolic-ref --quiet --short HEAD": "feature/widgets",
+	}
+	for k, v := range outputs {
+		all[k] = v
+	}
+	return &prtest.FakeGit{Outputs: all}
+}
+
+type fakeBrowser struct{ urls []string }
+
+func (b *fakeBrowser) Browse(u string) error {
+	b.urls = append(b.urls, u)
+	return nil
+}
+
+func TestCreate_FillOneCommit(t *testing.T) {
+	reg := httpmock.New(t)
+	noOpenPR(reg)
+	reg.Register("POST", prtest.PRs, httpmock.JSONResponse(201, prtest.PR42))
+	f, _, _, _ := prtest.NewFactory(reg)
+	prtest.SetGit(f, gitWith(map[string]string{
+		"log --reverse --format=%s%x1f%b%x1e origin/main..feature/widgets": "Add widgets\x1fAdds the widget factory.\n\x1e",
+	}))
+
+	if err := prtest.Run(NewCmdCreate(f, nil), "--fill", "-B", "main", "--no-default-reviewers"); err != nil {
+		t.Fatal(err)
+	}
+	body := prtest.JSONBodyOf(t, lastCall(reg))
+	if body["title"] != "Add widgets" || body["description"] != "Adds the widget factory." {
+		t.Errorf("body = %v", body)
+	}
+}
+
+func TestCreate_FillSeveralCommits(t *testing.T) {
+	reg := httpmock.New(t)
+	noOpenPR(reg)
+	reg.Register("POST", prtest.PRs, httpmock.JSONResponse(201, prtest.PR42))
+	f, _, _, _ := prtest.NewFactory(reg)
+	prtest.SetGit(f, gitWith(map[string]string{
+		"log --reverse --format=%s%x1f%b%x1e origin/main..feature/more_widgets-v2": "Add gears\x1f\x1e\nAdd widgets\x1fBody\n\x1e",
+	}))
+
+	if err := prtest.Run(NewCmdCreate(f, nil), "--fill", "-H", "feature/more_widgets-v2", "-B", "main", "--no-default-reviewers"); err != nil {
+		t.Fatal(err)
+	}
+	body := prtest.JSONBodyOf(t, lastCall(reg))
+	if body["title"] != "feature/more widgets v2" || body["description"] != "- Add gears\n- Add widgets" {
+		t.Errorf("body = %v", body)
+	}
+}
+
+func TestCreate_FillFlagsWin(t *testing.T) {
+	reg := httpmock.New(t)
+	noOpenPR(reg)
+	reg.Register("POST", prtest.PRs, httpmock.JSONResponse(201, prtest.PR42))
+	f, _, _, _ := prtest.NewFactory(reg)
+	prtest.SetGit(f, gitWith(map[string]string{
+		"log --reverse --format=%s%x1f%b%x1e origin/main..feature/widgets": "Add widgets\x1fFrom the commit\x1e",
+	}))
+
+	if err := prtest.Run(NewCmdCreate(f, nil), "--fill", "-t", "Custom", "-B", "main", "--no-default-reviewers"); err != nil {
+		t.Fatal(err)
+	}
+	body := prtest.JSONBodyOf(t, lastCall(reg))
+	if body["title"] != "Custom" || body["description"] != "From the commit" {
+		t.Errorf("body = %v", body)
+	}
+}
+
+func TestCreate_FillErrors(t *testing.T) {
+	cases := map[string]map[string]string{
+		"no commits": {"log --reverse --format=%s%x1f%b%x1e origin/main..feature/widgets": ""},
+		"no remote":  {"remote -v": "origin\tgit@github.com:acme/widgets.git (fetch)"},
+	}
+	for name, outputs := range cases {
+		reg := httpmock.New(t)
+		f, _, _, _ := prtest.NewFactory(reg)
+		prtest.SetGit(f, gitWith(outputs))
+		err := prtest.Run(NewCmdCreate(f, nil), "--fill", "-B", "main", "--no-default-reviewers")
+		if err == nil || !strings.Contains(err.Error(), "--fill") || len(prtest.Writes(reg)) != 0 {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestCreate_Web(t *testing.T) {
+	reg := httpmock.New(t)
+	f, _, out, _ := prtest.NewFactory(reg)
+	prtest.SetBranch(f, "feature/widgets")
+	b := &fakeBrowser{}
+	f.Browser = b
+
+	if err := prtest.Run(NewCmdCreate(f, nil), "--web", "-B", "develop"); err != nil {
+		t.Fatal(err)
+	}
+	want := "https://bitbucket.org/acme/widgets/pull-requests/new?" + url.Values{"source": {"feature/widgets"}, "dest": {"develop"}, "t": {"1"}}.Encode()
+	if !slices.Equal(b.urls, []string{want}) || out.Len() != 0 || len(reg.Calls) != 0 {
+		t.Errorf("urls %v out %q calls %d", b.urls, out.String(), len(reg.Calls))
+	}
+}
+
+func TestCreate_WebConflicts(t *testing.T) {
+	for _, args := range [][]string{{"--web", "--json", "id"}, {"--web", "--dry-run"}} {
+		f, _, _, _ := prtest.NewFactory(httpmock.New(t))
+		f.Browser = &fakeBrowser{}
+		err := prtest.Run(NewCmdCreate(f, nil), args...)
+		var flagErr *cmdutil.FlagError
+		if !errors.As(err, &flagErr) {
+			t.Errorf("%v: err = %v", args, err)
+		}
+	}
+}
+
+func TestCreate_WarnsWhenLocalBranchIsAhead(t *testing.T) {
+	for _, tc := range []struct{ local, warning string }{
+		{"9999999aaaabbbbccccdddd", "warning: the pull request uses commit abc1234, but your local branch feature/widgets is at 9999999; push your latest commits\n"},
+		{"abc1234aaaabbbbccccdddd", ""},
+	} {
+		reg := httpmock.New(t)
+		noOpenPR(reg)
+		reg.Register("POST", prtest.PRs, httpmock.JSONResponse(201, prtest.PR42))
+		f, _, _, errOut := prtest.NewFactory(reg)
+		prtest.SetGit(f, gitWith(map[string]string{"rev-parse --verify --quiet refs/heads/feature/widgets": tc.local}))
+
+		if err := prtest.Run(NewCmdCreate(f, nil), "-B", "main", "-t", "x", "-b", "", "--no-default-reviewers"); err != nil {
+			t.Fatal(err)
+		}
+		if errOut.String() != tc.warning {
+			t.Errorf("local %s: stderr = %q", tc.local, errOut.String())
+		}
 	}
 }

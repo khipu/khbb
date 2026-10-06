@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -180,4 +181,31 @@ func JSONBodyOf(t testing.TB, c httpmock.Call) map[string]any {
 		t.Fatalf("request body %q is not a JSON object: %v", c.Body, err)
 	}
 	return m
+}
+
+// FakeGit stands in for git. It answers a command from Outputs, or fails it with the message in
+// Errors, keyed by the arguments joined with spaces; it records every call and fails any command
+// it does not know.
+type FakeGit struct {
+	Outputs map[string]string
+	Errors  map[string]string
+	Calls   []string
+}
+
+// Run implements gitctx.Resolver.Git.
+func (g *FakeGit) Run(args ...string) (string, error) {
+	key := strings.Join(args, " ")
+	g.Calls = append(g.Calls, key)
+	if msg, ok := g.Errors[key]; ok {
+		return "", errors.New(msg)
+	}
+	if out, ok := g.Outputs[key]; ok {
+		return out, nil
+	}
+	return "", fmt.Errorf("fake git: unexpected command: git %s", key)
+}
+
+// SetGit makes f run every git command through g.
+func SetGit(f *cmdutil.Factory, g *FakeGit) {
+	f.Git = &gitctx.Resolver{Git: g.Run}
 }

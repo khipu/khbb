@@ -89,6 +89,30 @@ func TestCurrentBranch(t *testing.T) {
 	}
 }
 
+func TestRemoteFor(t *testing.T) {
+	r := fakeResolver(strings.Join([]string{
+		"fork\tgit@bitbucket.org:dev/widgets.git (fetch)",
+		"upstream\tgit@bitbucket.org:acme/widgets.git (fetch)",
+		"origin\thttps://bitbucket.org/acme/widgets.git (fetch)",
+		"mirror\tgit@github.com:acme/widgets.git (fetch)",
+	}, "\n"), "", nil)
+	cases := map[string]string{"acme/widgets": "origin", "ACME/Widgets": "origin", "dev/widgets": "fork", "acme/other": ""}
+	for full, want := range cases {
+		repo, _ := gitctx.ParseRepo(full)
+		if got, err := r.RemoteFor(repo); err != nil || got != want {
+			t.Errorf("RemoteFor(%s) = %q, %v; want %q", full, got, err, want)
+		}
+	}
+}
+
+func TestRemoteFor_SSHAlias(t *testing.T) {
+	r := fakeResolver("upstream\tgit@bb-work:acme/widgets.git (fetch)", "", nil)
+	r.SSHHostname = func(alias string) (string, error) { return "bitbucket.org", nil }
+	if got, err := r.RemoteFor(gitctx.Repo{Workspace: "acme", Slug: "widgets"}); err != nil || got != "upstream" {
+		t.Errorf("RemoteFor = %q, %v", got, err)
+	}
+}
+
 func TestResolver_RealGit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
