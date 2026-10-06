@@ -80,6 +80,21 @@ func TestCreate_ExistingPullRequest(t *testing.T) {
 	}
 }
 
+func TestCreate_QuotesBranchNamesInTheDuplicateCheck(t *testing.T) {
+	reg := httpmock.New(t)
+	noOpenPR(reg)
+	reg.Register("POST", prtest.PRs, httpmock.JSONResponse(201, prtest.PR42))
+	f, _, _, _ := prtest.NewFactory(reg)
+
+	err := prtest.Run(NewCmdCreate(f, nil), "-H", `feat/"x"`, "-B", "main", "-t", "x", "-b", "", "--no-default-reviewers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := reg.Calls[0].URL.Query().Get("q"); q != `state = "OPEN" AND (source.branch.name = "feat/\"x\"" AND destination.branch.name = "main")` {
+		t.Errorf("duplicate check q = %q", q)
+	}
+}
+
 func TestCreate_HeadNotPushed(t *testing.T) {
 	reg := httpmock.New(t)
 	noOpenPR(reg)
