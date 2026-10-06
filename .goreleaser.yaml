@@ -1,0 +1,81 @@
+# GoReleaser configuration: builds khbb for macOS, Linux and Windows on amd64 and arm64, publishes
+# the archives and checksums.txt to a GitHub release of khipu/khbb, and updates the Homebrew tap
+# (khipu/homebrew-tap) and the Scoop bucket (khipu/scoop-bucket). Run by
+# .github/workflows/release.yml when a v* tag is pushed.
+version: 2
+
+project_name: khbb
+
+builds:
+  - id: khbb
+    main: ./cmd/khbb
+    binary: khbb
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: khbb
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^chore"
+      - "^ci"
+
+release:
+  github:
+    owner: khipu
+    name: khbb
+  prerelease: auto
+  footer: |
+    Install with Homebrew: `brew install khipu/tap/khbb`. With Scoop: `scoop bucket add khipu https://github.com/khipu/scoop-bucket` then `scoop install khbb`. Or download an archive below and check it against `checksums.txt`.
+
+homebrew_casks:
+  - name: khbb
+    repository:
+      owner: khipu
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/khipu/khbb
+    description: Bitbucket Cloud CLI for pull requests and pipelines
+    license: MIT
+    skip_upload: auto
+    generate_completions_from_executable:
+      shell_parameter_format: cobra
+      shells: [bash, zsh, fish]
+    hooks:
+      post:
+        # The binaries are not signed or notarized; without this, macOS refuses to run them.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/khbb"]
+          end
+
+scoops:
+  - name: khbb
+    repository:
+      owner: khipu
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/khipu/khbb
+    description: Bitbucket Cloud CLI for pull requests and pipelines
+    license: MIT
+    skip_upload: auto
