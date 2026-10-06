@@ -33,6 +33,12 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # gofmt from the Go version in go.mod: golangci-lint's own gofmt comes from the Go it was built
+      # with, which may align code differently.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "Run gofmt -w on:"; echo "$unformatted"; exit 1; fi
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.14.0
