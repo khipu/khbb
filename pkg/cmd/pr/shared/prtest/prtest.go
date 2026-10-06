@@ -171,3 +171,13 @@ func AssertJSONBody(t testing.TB, c httpmock.Call, want string) {
 		t.Errorf("request body = %s, want %s", c.Body, want)
 	}
 }
+
+// JSONBodyOf decodes the JSON object body of a recorded request.
+func JSONBodyOf(t testing.TB, c httpmock.Call) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(c.Body, &m); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", c.Body, err)
+	}
+	return m
+}

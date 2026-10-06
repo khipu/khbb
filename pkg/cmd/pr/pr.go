@@ -7,6 +7,7 @@ import (
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/pkg/cmd/pr/checks"
 	"github.com/khipu/khbb/pkg/cmd/pr/comment"
+	"github.com/khipu/khbb/pkg/cmd/pr/create"
 	"github.com/khipu/khbb/pkg/cmd/pr/diff"
 	"github.com/khipu/khbb/pkg/cmd/pr/list"
 	"github.com/khipu/khbb/pkg/cmd/pr/review"
@@ -25,6 +26,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 	}
 	cmdutil.EnableRepoOverride(cmd, f)
 	cmd.AddCommand(
+		create.NewCmdCreate(f, nil),
 		list.NewCmdList(f, nil),
 		view.NewCmdView(f, nil),
 		diff.NewCmdDiff(f, nil),
