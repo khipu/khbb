@@ -2,6 +2,7 @@ package root_test
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -170,4 +171,12 @@ func TestSkillMentionsEveryCommand(t *testing.T) {
 
 func TestSkillCommandLinesAreValid(t *testing.T) {
 	checkDocCommands(t, "skills/khbb/SKILL.md", skills.Khbb)
+}
+
+func TestReadmeCommandLinesAreValid(t *testing.T) {
+	readme, err := os.ReadFile("../../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkDocCommands(t, "README.md", string(readme))
 }
