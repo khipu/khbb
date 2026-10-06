@@ -130,6 +130,16 @@ func editRun(ctx context.Context, opts *EditOptions) error {
 		if upd.Reviewers, err = editedReviewers(ctx, client, repo, pr, opts); err != nil {
 			return err
 		}
+	} else {
+		current := make([]string, 0, len(pr.Reviewers))
+		for _, r := range pr.Reviewers {
+			current = append(current, r.UUID)
+		}
+		var author string
+		if pr.Author != nil {
+			author = pr.Author.UUID
+		}
+		upd.Reviewers = shared.UniqueUUIDs(current, author)
 	}
 	updated, err := client.UpdatePullRequest(ctx, repo.Workspace, repo.Slug, pr.ID, upd)
 	if err != nil {

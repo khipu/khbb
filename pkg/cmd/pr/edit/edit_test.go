@@ -33,10 +33,24 @@ func TestEdit_TitleAndReady(t *testing.T) {
 	if err := prtest.Run(NewCmdEdit(f, nil), "42", "-t", "New title", "--ready"); err != nil {
 		t.Fatal(err)
 	}
-	prtest.AssertJSONBody(t, lastCall(reg), `{"title":"New title","draft":false}`)
+	prtest.AssertJSONBody(t, lastCall(reg), `{"title":"New title","draft":false,"reviewers":[{"uuid":"`+prtest.BobUUID+`"},{"uuid":"`+prtest.CyUUID+`"}]}`)
 	if out.String() != "https://bitbucket.org/acme/widgets/pull-requests/42\n" {
 		t.Errorf("out = %q", out.String())
 	}
+}
+
+// TestEdit_KeepsReviewers guards against regressing to a PUT that omits reviewers: Bitbucket's
+// partial PUT only keeps fields it is sent, so a title-only edit must still carry the current
+// reviewers or it clears them.
+func TestEdit_KeepsReviewers(t *testing.T) {
+	reg := newReg(t, prtest.PR42)
+	put(reg)
+	f, _, _, _ := prtest.NewFactory(reg)
+
+	if err := prtest.Run(NewCmdEdit(f, nil), "42", "-t", "New title"); err != nil {
+		t.Fatal(err)
+	}
+	prtest.AssertJSONBody(t, lastCall(reg), `{"title":"New title","reviewers":[{"uuid":"`+prtest.BobUUID+`"},{"uuid":"`+prtest.CyUUID+`"}]}`)
 }
 
 func TestEdit_BodyFileBaseAndDraft(t *testing.T) {
@@ -51,7 +65,7 @@ func TestEdit_BodyFileBaseAndDraft(t *testing.T) {
 	if err := prtest.Run(NewCmdEdit(f, nil), "42", "-F", path, "-B", "develop", "--draft"); err != nil {
 		t.Fatal(err)
 	}
-	prtest.AssertJSONBody(t, lastCall(reg), `{"description":"New description","destination":{"branch":{"name":"develop"}},"draft":true}`)
+	prtest.AssertJSONBody(t, lastCall(reg), `{"description":"New description","destination":{"branch":{"name":"develop"}},"draft":true,"reviewers":[{"uuid":"`+prtest.BobUUID+`"},{"uuid":"`+prtest.CyUUID+`"}]}`)
 }
 
 func TestEdit_Reviewers(t *testing.T) {
@@ -76,7 +90,7 @@ func TestEdit_JSON(t *testing.T) {
 	if err := prtest.Run(NewCmdEdit(f, nil), "42", "-b", "", "--json", "title"); err != nil {
 		t.Fatal(err)
 	}
-	prtest.AssertJSONBody(t, lastCall(reg), `{"description":""}`)
+	prtest.AssertJSONBody(t, lastCall(reg), `{"description":"","reviewers":[{"uuid":"`+prtest.BobUUID+`"},{"uuid":"`+prtest.CyUUID+`"}]}`)
 	if out.String() != `{"title":"Add widgets"}`+"\n" {
 		t.Errorf("out = %q", out.String())
 	}
