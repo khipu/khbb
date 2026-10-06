@@ -88,3 +88,13 @@ func TestRootRegistersPRGroup(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestRootRegistersPipelineGroup(t *testing.T) {
+	ios, _, _, _ := iostreams.Test()
+	cmd := root.NewCmdRoot(&cmdutil.Factory{AppVersion: "1.2.3", IOStreams: ios})
+	cmd.SetArgs([]string{"pipeline", "lisst"})
+	var flagErr *cmdutil.FlagError
+	if err := cmd.Execute(); !errors.As(err, &flagErr) || !strings.Contains(err.Error(), `unknown command "lisst" for "khbb pipeline"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
