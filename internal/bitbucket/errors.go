@@ -2,6 +2,7 @@ package bitbucket
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -100,4 +101,15 @@ func parseFields(raw map[string]json.RawMessage) map[string][]string {
 		out[k] = []string{string(v)}
 	}
 	return out
+}
+
+// IsTransient reports whether err is worth retrying later: rate limiting, a server error or a
+// network failure.
+func IsTransient(err error) bool {
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusTooManyRequests || httpErr.StatusCode >= 500
+	}
+	var netErr *NetworkError
+	return errors.As(err, &netErr)
 }

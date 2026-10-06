@@ -3,7 +3,6 @@ package checks
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -99,7 +98,7 @@ func checksRun(ctx context.Context, opts *ChecksOptions) error {
 		statuses, err := client.ListPRStatuses(ctx, repo.Workspace, repo.Slug, pr.ID)
 		if err != nil {
 			errorsInARow++
-			if !opts.Watch || !transient(err) || errorsInARow >= maxConsecutiveErrors {
+			if !opts.Watch || !bitbucket.IsTransient(err) || errorsInARow >= maxConsecutiveErrors {
 				return err
 			}
 			opts.Sleep(interval)
@@ -130,15 +129,6 @@ func checksRun(ctx context.Context, opts *ChecksOptions) error {
 		}
 		opts.Sleep(interval)
 	}
-}
-
-func transient(err error) bool {
-	var httpErr *bitbucket.HTTPError
-	if errors.As(err, &httpErr) {
-		return httpErr.StatusCode == 429 || httpErr.StatusCode >= 500
-	}
-	var netErr *bitbucket.NetworkError
-	return errors.As(err, &netErr)
 }
 
 func summarize(checks []shared.Check) summary {
