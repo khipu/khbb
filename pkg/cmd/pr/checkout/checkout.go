@@ -38,9 +38,10 @@ func NewCmdCheckout(f *cmdutil.Factory, runF func(*CheckoutOptions) error) *cobr
 		Use:   "checkout {<number> | <url>}",
 		Short: "Check out a pull request in git",
 		Long: `Fetch the source branch of a pull request and switch to it, creating a local branch that
-tracks it. An existing local branch is fast-forwarded; --force resets it instead. Pull requests
-from forks are fetched from the fork's URL (git_protocol: ssh or https). Your git credentials
-are used for fetching.`,
+tracks it. An existing local branch is fast-forwarded; --force resets the local branch to the
+pull request with git reset --hard instead, discarding local commits and uncommitted changes.
+Pull requests from forks are fetched from the fork's URL (git_protocol: ssh or https). Your git
+credentials are used for fetching.`,
 		Example: `  $ khbb pr checkout 42
   $ khbb pr checkout 42 --branch review-42 --force`,
 		Args: cmdutil.ExactArgs(1, "<number> | <url>"),
@@ -54,7 +55,7 @@ are used for fetching.`,
 		},
 	}
 	cmd.Flags().StringVarP(&opts.BranchName, "branch", "b", "", "Local branch `name` to use (default: the source branch name)")
-	cmd.Flags().BoolVarP(&opts.Force, "force", "f", false, "Reset an existing local branch to the pull request")
+	cmd.Flags().BoolVarP(&opts.Force, "force", "f", false, "Reset an existing local branch to the pull request, discarding local changes")
 	return cmd
 }
 
