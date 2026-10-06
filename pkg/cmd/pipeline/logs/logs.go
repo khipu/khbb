@@ -89,7 +89,11 @@ func logsRun(ctx context.Context, opts *LogsOptions) error {
 		return err
 	}
 	if len(selected) == 0 {
-		fmt.Fprintf(opts.IO.ErrOut, "no failed steps in pipeline #%d\n", p.BuildNumber)
+		if opts.Failed {
+			fmt.Fprintf(opts.IO.ErrOut, "no failed steps in pipeline #%d\n", p.BuildNumber)
+		} else {
+			fmt.Fprintf(opts.IO.ErrOut, "pipeline #%d has no steps\n", p.BuildNumber)
+		}
 		return nil
 	}
 	headers := len(selected) > 1

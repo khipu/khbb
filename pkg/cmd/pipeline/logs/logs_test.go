@@ -66,6 +66,16 @@ func TestLogs_FailedOnly(t *testing.T) {
 	}
 }
 
+func TestLogs_NoSteps(t *testing.T) {
+	reg := httpmock.New(t)
+	pipelineWithSteps(reg)
+
+	out, errOut, err := run(reg)
+	if err != nil || out != "" || errOut != "pipeline #42 has no steps\n" {
+		t.Errorf("out %q stderr %q err %v", out, errOut, err)
+	}
+}
+
 func TestLogs_NoFailedSteps(t *testing.T) {
 	reg := httpmock.New(t)
 	pipelineWithSteps(reg, ptest.Step("{s1}", "Build", ptest.StateSuccessful))
