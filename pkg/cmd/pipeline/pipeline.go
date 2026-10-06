@@ -7,6 +7,7 @@ import (
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/list"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/logs"
+	"github.com/khipu/khbb/pkg/cmd/pipeline/rerun"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/run"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/stop"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/view"
@@ -30,6 +31,7 @@ func NewCmdPipeline(f *cmdutil.Factory) *cobra.Command {
 		logs.NewCmdLogs(f, nil),
 		run.NewCmdRun(f, nil),
 		stop.NewCmdStop(f, nil),
+		rerun.NewCmdRerun(f, nil),
 		watch.NewCmdWatch(f, nil),
 	)
 	return cmd
