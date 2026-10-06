@@ -118,3 +118,11 @@ func TestClassify_FieldHintThatRepeatsTheMessage(t *testing.T) {
 		t.Errorf("Classify = %+v, want validation without a hint that repeats the message", info)
 	}
 }
+
+func TestClassify_NoRepositoryHintForPipelines(t *testing.T) {
+	err := &bitbucket.HTTPError{StatusCode: 404, Message: "Could not find last reference for branch nope",
+		URL: "https://api.bitbucket.org/2.0/repositories/acme/widgets/pipelines"}
+	if info := cmdutil.Classify(err); info.Code != "not_found" || info.Hint != "" {
+		t.Errorf("Classify = %+v, want not_found without a hint", info)
+	}
+}

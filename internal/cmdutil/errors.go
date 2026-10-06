@@ -114,6 +114,8 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 	case e.StatusCode == 404:
 		info.Code = "not_found"
 		switch {
+		case strings.Contains(e.URL, "/pipelines"):
+			// Pipeline 404s name what is missing (a build number, a branch, a tag); a repository hint would mislead.
 		case strings.Contains(e.URL, "/pullrequests/"):
 			info.Hint = "check the pull request number and that it belongs to this repository"
 		case strings.Contains(e.URL, "/repositories/"):

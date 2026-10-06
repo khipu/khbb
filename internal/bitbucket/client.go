@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -59,7 +60,7 @@ func New(opts Options) *Client {
 		panic(fmt.Sprintf("bitbucket: invalid base URL %q: %v", opts.BaseURL, err))
 	}
 	if opts.HTTPClient == nil {
-		opts.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+		opts.HTTPClient = NewHTTPClient()
 	}
 	if opts.UserAgent == "" {
 		opts.UserAgent = "khbb"
@@ -74,6 +75,27 @@ func New(opts Options) *Client {
 		opts.DryRunOut = io.Discard
 	}
 	return &Client{base: base, opts: opts}
+}
+
+// NewHTTPClient returns khbb's default HTTP client. It bounds connecting, the TLS handshake and the
+// wait for response headers — not the whole request, so large step logs can stream — and it
+// follows at most 10 redirects, never from https to http.
+func NewHTTPClient() *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	tr.TLSHandshakeTimeout = 10 * time.Second
+	tr.ResponseHeaderTimeout = 30 * time.Second
+	return &http.Client{Transport: tr, CheckRedirect: checkRedirect}
+}
+
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing to follow a redirect from https to %s", req.URL.Scheme)
+	}
+	return nil
 }
 
 // URL resolves path against the API root. Absolute URLs must point at the API host,

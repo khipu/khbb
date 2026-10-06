@@ -169,3 +169,30 @@ func TestRequest_WrapsNetworkErrors(t *testing.T) {
 		t.Fatalf("expected NetworkError wrapping %v, got %T: %v", boom, err, err)
 	}
 }
+
+func TestNewHTTPClient(t *testing.T) {
+	c := bitbucket.NewHTTPClient()
+	if c.Timeout != 0 {
+		t.Errorf("Timeout = %v: a whole-request timeout would cut long log downloads", c.Timeout)
+	}
+	tr, ok := c.Transport.(*http.Transport)
+	if !ok || tr.ResponseHeaderTimeout != 30*time.Second || tr.TLSHandshakeTimeout != 10*time.Second || tr.Proxy == nil {
+		t.Fatalf("transport = %#v", c.Transport)
+	}
+	from, _ := http.NewRequest("GET", "https://api.bitbucket.org/2.0/repositories/acme/widgets/pipelines/1/steps/x/log", nil)
+	toHTTP, _ := http.NewRequest("GET", "http://storage.example.com/log", nil)
+	toHTTPS, _ := http.NewRequest("GET", "https://storage.example.com/log", nil)
+	if err := c.CheckRedirect(toHTTP, []*http.Request{from}); err == nil {
+		t.Error("a redirect from https to http must be refused")
+	}
+	if err := c.CheckRedirect(toHTTPS, []*http.Request{from}); err != nil {
+		t.Errorf("https to https: %v", err)
+	}
+	via := make([]*http.Request, 10)
+	for i := range via {
+		via[i] = from
+	}
+	if err := c.CheckRedirect(toHTTPS, via); err == nil {
+		t.Error("an 11th redirect must be refused")
+	}
+}

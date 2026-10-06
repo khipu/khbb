@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // HTTPError is a non-2xx response from the Bitbucket API.
@@ -55,6 +56,10 @@ func ParseHTTPError(resp *http.Response, body []byte) *HTTPError {
 		e.Message = payload.Error.Message
 		e.Detail, e.RequiredScopes = parseDetail(payload.Error.Detail)
 		e.Fields = parseFields(payload.Error.Fields)
+		// Pipelines errors say "Bad request" or "Not found" and put the reason in a string detail.
+		if isText(payload.Error.Detail) && e.Detail != "" && isGenericMessage(e.Message, e.StatusCode) {
+			e.Message, e.Detail = e.Detail, ""
+		}
 	}
 	return e
 }
@@ -101,6 +106,18 @@ func parseFields(raw map[string]json.RawMessage) map[string][]string {
 		out[k] = []string{string(v)}
 	}
 	return out
+}
+
+func isText(raw json.RawMessage) bool {
+	return len(raw) > 0 && raw[0] == '"'
+}
+
+func isGenericMessage(msg string, status int) bool {
+	switch strings.ToLower(strings.TrimSpace(msg)) {
+	case "", "bad request", "not found", strings.ToLower(http.StatusText(status)):
+		return true
+	}
+	return false
 }
 
 // IsTransient reports whether err is worth retrying later: rate limiting, a server error or a
