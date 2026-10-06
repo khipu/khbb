@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -80,6 +81,12 @@ func checkoutRun(ctx context.Context, opts *CheckoutOptions) error {
 	local := opts.BranchName
 	if local == "" {
 		local = branch
+	}
+	if strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("refusing to check out branch %q: branch names starting with \"-\" are not supported", branch)
+	}
+	if strings.HasPrefix(local, "-") {
+		return fmt.Errorf("refusing to check out branch %q: branch names starting with \"-\" are not supported", local)
 	}
 	remote, err := opts.Git.RemoteFor(source)
 	if err != nil {

@@ -156,3 +156,30 @@ func TestCheckout_NeedsOneArgument(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckout_RefusesBranchNamesStartingWithADash(t *testing.T) {
+	// Case 1: PR whose source branch is "-x"
+	dashPR42 := strings.Replace(prtest.PR42, `"branch":{"name":"feature/widgets"}`, `"branch":{"name":"-x"}`, 1)
+	git := &prtest.FakeGit{}
+	f, _ := setup(t, dashPR42, git)
+
+	err := prtest.Run(NewCmdCheckout(f, nil), "42")
+	if err == nil || !strings.Contains(err.Error(), "refusing to check out branch") {
+		t.Errorf("Case 1 (PR source branch is -x): err = %v", err)
+	}
+	if len(git.Calls) != 0 {
+		t.Errorf("Case 1: expected no git calls, got %d: %v", len(git.Calls), git.Calls)
+	}
+
+	// Case 2: PR42 with -b -x
+	git2 := &prtest.FakeGit{}
+	f2, _ := setup(t, prtest.PR42, git2)
+
+	err = prtest.Run(NewCmdCheckout(f2, nil), "42", "-b", "-x")
+	if err == nil || !strings.Contains(err.Error(), "refusing to check out branch") {
+		t.Errorf("Case 2 (user-supplied branch -x): err = %v", err)
+	}
+	if len(git2.Calls) != 0 {
+		t.Errorf("Case 2: expected no git calls, got %d: %v", len(git2.Calls), git2.Calls)
+	}
+}
