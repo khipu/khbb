@@ -50,18 +50,18 @@ func TestGetText_FailsWhenTheBodyStalls(t *testing.T) {
 func TestGetText_KeepsReadingASlowSteadyBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		// 8 chunks 60 ms apart: the whole body takes longer than the idle timeout, no gap does.
-		for i := range 8 {
+		// 10 chunks 60 ms apart: the whole body takes longer than the idle timeout, no gap comes close.
+		for i := range 10 {
 			_, _ = w.Write([]byte{byte('a' + i)})
 			w.(http.Flusher).Flush()
 			time.Sleep(60 * time.Millisecond)
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := bitbucket.New(bitbucket.Options{BaseURL: srv.URL, IdleTimeout: 300 * time.Millisecond})
+	c := bitbucket.New(bitbucket.Options{BaseURL: srv.URL, IdleTimeout: 500 * time.Millisecond})
 
 	got, err := c.GetText(context.Background(), "log")
-	if err != nil || got != "abcdefgh" {
+	if err != nil || got != "abcdefghij" {
 		t.Fatalf("GetText = %q, %v; a body that keeps arriving must never be cut", got, err)
 	}
 }

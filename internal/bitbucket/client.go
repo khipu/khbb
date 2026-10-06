@@ -229,9 +229,9 @@ func (c *Client) send(ctx context.Context, method, u string, header http.Header,
 			return resp, nil
 		}
 		wait := retryDelay(resp, attempt)
+		fmt.Fprint(c.opts.Notices, retryNotice(resp.StatusCode, wait, attempt+1, c.opts.MaxAttempts))
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
-		fmt.Fprint(c.opts.Notices, retryNotice(resp.StatusCode, wait, attempt+1, c.opts.MaxAttempts))
 		c.opts.Sleep(wait)
 	}
 }

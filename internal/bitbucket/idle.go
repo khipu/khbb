@@ -16,6 +16,9 @@ type idleTimeoutBody struct {
 	timeout time.Duration
 	timer   *time.Timer
 	cancel  context.CancelFunc
+	// stalled records that the clock ran out and the request was cancelled. It is never cleared:
+	// once cancelled, every later read of this body fails because of that cancellation, so the
+	// stall is the cause to report even if a byte buffered before the cancel still arrives.
 	stalled atomic.Bool
 }
 
