@@ -8,6 +8,7 @@ import (
 	"github.com/khipu/khbb/pkg/cmd/pr/checks"
 	"github.com/khipu/khbb/pkg/cmd/pr/diff"
 	"github.com/khipu/khbb/pkg/cmd/pr/list"
+	"github.com/khipu/khbb/pkg/cmd/pr/review"
 	prStatus "github.com/khipu/khbb/pkg/cmd/pr/status"
 	"github.com/khipu/khbb/pkg/cmd/pr/view"
 )
@@ -17,7 +18,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pr <command>",
 		Short: "Work with Bitbucket pull requests",
-		Long:  "List, inspect and check pull requests. Commands that take a pull request default to the open pull request of the current branch.",
+		Long:  "Create, review, merge and inspect pull requests. Commands that take a pull request default to the open pull request of the current branch.",
 		Args:  cobra.ArbitraryArgs,
 		RunE:  cmdutil.GroupRunE,
 	}
@@ -28,6 +29,9 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 		diff.NewCmdDiff(f, nil),
 		prStatus.NewCmdStatus(f, nil),
 		checks.NewCmdChecks(f, nil),
+		review.NewCmdApprove(f, nil),
+		review.NewCmdUnapprove(f, nil),
+		review.NewCmdRequestChanges(f, nil),
 	)
 	return cmd
 }
