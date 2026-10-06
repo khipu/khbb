@@ -136,3 +136,24 @@ func TestResolver_RealGit(t *testing.T) {
 		t.Errorf("CurrentBranch = %q, %v", b, err)
 	}
 }
+
+func TestBaseRepo_AltSSHHost(t *testing.T) {
+	r := fakeResolver("origin\tssh://git@altssh.bitbucket.org:443/acme/widgets.git (fetch)", "", nil)
+	r.SSHHostname = func(alias string) (string, error) {
+		t.Errorf("altssh.bitbucket.org needs no alias lookup, asked for %q", alias)
+		return "", errors.New("unexpected lookup")
+	}
+	repo, err := r.BaseRepo()
+	if err != nil || repo.FullName() != "acme/widgets" {
+		t.Errorf("BaseRepo = %v, %v", repo, err)
+	}
+}
+
+func TestBaseRepo_AliasForAltSSHHost(t *testing.T) {
+	r := fakeResolver("origin\tgit@bb-443:acme/widgets.git (fetch)", "", nil)
+	r.SSHHostname = func(string) (string, error) { return "altssh.bitbucket.org", nil }
+	repo, err := r.BaseRepo()
+	if err != nil || repo.FullName() != "acme/widgets" {
+		t.Errorf("BaseRepo = %v, %v", repo, err)
+	}
+}

@@ -95,18 +95,18 @@ func (r *Resolver) RemoteFor(repo Repo) (string, error) {
 }
 
 // bitbucketRepo returns the repository a remote URL points at; ok is false for hosts other than
-// bitbucket.org, after resolving SSH host aliases.
+// bitbucket.org and altssh.bitbucket.org, after resolving SSH host aliases.
 func (r *Resolver) bitbucketRepo(rawURL string) (Repo, bool) {
 	host, repo, isSSH, err := parseRemoteURL(rawURL)
 	if err != nil {
 		return Repo{}, false
 	}
-	if host != bitbucketHost && isSSH && r.SSHHostname != nil {
+	if !isBitbucketHost(host) && isSSH && r.SSHHostname != nil {
 		if real, err := r.SSHHostname(host); err == nil {
 			host = real
 		}
 	}
-	return repo, host == bitbucketHost
+	return repo, isBitbucketHost(host)
 }
 
 // CurrentBranch returns the checked-out branch name.
@@ -138,7 +138,12 @@ func runGit(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// sshHostname asks ssh which hostname an alias from ~/.ssh/config stands for.
 func sshHostname(alias string) (string, error) {
+	// ssh would read a host that starts with "-" as an option, such as -oProxyCommand=….
+	if alias == "" || strings.HasPrefix(alias, "-") {
+		return "", fmt.Errorf("invalid ssh host %q", alias)
+	}
 	exe, err := safeexec.LookPath("ssh")
 	if err != nil {
 		return "", err

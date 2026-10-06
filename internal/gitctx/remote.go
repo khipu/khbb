@@ -6,7 +6,11 @@ import (
 	"strings"
 )
 
-const bitbucketHost = "bitbucket.org"
+// isBitbucketHost reports whether host is bitbucket.org or altssh.bitbucket.org, which serves SSH on
+// port 443 for networks that block port 22.
+func isBitbucketHost(host string) bool {
+	return host == "bitbucket.org" || host == "altssh.bitbucket.org"
+}
 
 // Remote is a git remote and its fetch URL.
 type Remote struct {

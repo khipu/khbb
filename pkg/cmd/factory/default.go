@@ -4,6 +4,7 @@ package factory
 import (
 	"errors"
 	"os"
+	"strings"
 
 	cliBrowser "github.com/cli/browser"
 	"github.com/cli/go-gh/v2/pkg/browser"
@@ -19,7 +20,7 @@ import (
 // New returns the production Factory.
 func New(version, commit, date string) *cmdutil.Factory {
 	ios := iostreams.System()
-	if os.Getenv("KHBB_PROMPT_DISABLED") != "" {
+	if envEnabled("KHBB_PROMPT_DISABLED") {
 		ios.SetNeverPrompt(true)
 	}
 	f := &cmdutil.Factory{
@@ -71,7 +72,7 @@ func newClient(f *cmdutil.Factory) (*bitbucket.Client, error) {
 		DryRun:    f.DryRun,
 		DryRunOut: f.IOStreams.Out,
 	}
-	if os.Getenv("KHBB_DEBUG") != "" {
+	if envEnabled("KHBB_DEBUG") {
 		opts.Debug = f.IOStreams.ErrOut
 	}
 	return bitbucket.New(opts), nil
@@ -100,4 +101,14 @@ func resolveLauncher(configured string) string {
 		return configured
 	}
 	return os.Getenv("BROWSER")
+}
+
+// envEnabled reports whether the environment variable name is set to anything but "", "0",
+// "false", "no" or "off" (in any case).
+func envEnabled(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "", "0", "false", "no", "off":
+		return false
+	}
+	return true
 }
