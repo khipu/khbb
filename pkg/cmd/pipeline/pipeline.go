@@ -6,6 +6,7 @@ import (
 
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/list"
+	"github.com/khipu/khbb/pkg/cmd/pipeline/logs"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/view"
 )
 
@@ -23,6 +24,7 @@ func NewCmdPipeline(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(
 		list.NewCmdList(f, nil),
 		view.NewCmdView(f, nil),
+		logs.NewCmdLogs(f, nil),
 	)
 	return cmd
 }
