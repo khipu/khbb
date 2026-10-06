@@ -9,6 +9,7 @@ import (
 	authCmd "github.com/khipu/khbb/pkg/cmd/auth"
 	pipelineCmd "github.com/khipu/khbb/pkg/cmd/pipeline"
 	prCmd "github.com/khipu/khbb/pkg/cmd/pr"
+	skillCmd "github.com/khipu/khbb/pkg/cmd/skill"
 	versionCmd "github.com/khipu/khbb/pkg/cmd/version"
 )
 
@@ -37,6 +38,7 @@ func NewCmdRoot(f *cmdutil.Factory) *cobra.Command {
 		authCmd.NewCmdAuth(f),
 		pipelineCmd.NewCmdPipeline(f),
 		prCmd.NewCmdPR(f),
+		skillCmd.NewCmdSkill(f),
 		versionCmd.NewCmdVersion(f),
 	)
 	return cmd

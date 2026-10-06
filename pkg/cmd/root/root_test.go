@@ -98,3 +98,13 @@ func TestRootRegistersPipelineGroup(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestRootRegistersSkillGroup(t *testing.T) {
+	ios, _, _, _ := iostreams.Test()
+	cmd := root.NewCmdRoot(&cmdutil.Factory{AppVersion: "1.2.3", IOStreams: ios})
+	cmd.SetArgs([]string{"skill", "instal"})
+	var flagErr *cmdutil.FlagError
+	if err := cmd.Execute(); !errors.As(err, &flagErr) || !strings.Contains(err.Error(), `unknown command "instal" for "khbb skill"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
