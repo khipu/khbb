@@ -6,6 +6,7 @@ import (
 
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/pkg/cmd/pr/checks"
+	"github.com/khipu/khbb/pkg/cmd/pr/comment"
 	"github.com/khipu/khbb/pkg/cmd/pr/diff"
 	"github.com/khipu/khbb/pkg/cmd/pr/list"
 	"github.com/khipu/khbb/pkg/cmd/pr/review"
@@ -32,6 +33,7 @@ func NewCmdPR(f *cmdutil.Factory) *cobra.Command {
 		review.NewCmdApprove(f, nil),
 		review.NewCmdUnapprove(f, nil),
 		review.NewCmdRequestChanges(f, nil),
+		comment.NewCmdComment(f, nil),
 	)
 	return cmd
 }
