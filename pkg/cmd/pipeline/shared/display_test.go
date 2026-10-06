@@ -56,7 +56,8 @@ func TestRenderSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"Pipeline #42 X failed\n", "branch main · push by ada · commit abc1234\n",
-		"Started 2026-10-06 12:00 UTC · took 1m02s\n", "STEP", "Build", "✓ successful", "12s", "{s1}", "Deploy", "- skipped"} {
+		"Started 2026-10-06 12:00 UTC · took 1m02s\n", "STEP", "Build", "✓ successful", "12s", "{s1}", "Deploy", "- skipped",
+		"View this pipeline on Bitbucket: https://bitbucket.org/acme/widgets/pipelines/results/42"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}

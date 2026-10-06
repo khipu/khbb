@@ -114,7 +114,7 @@ func printTable(ios *iostreams.IOStreams, pipelines []shared.Pipeline) error {
 			tp.AddField(shared.RefLabel(p))
 			tp.AddField(p.Trigger)
 			tp.AddField(duration(p))
-			tp.AddField(p.CreatedOn.Format("2006-01-02 15:04"))
+			tp.AddField(p.CreatedOn.Format("2006-01-02 15:04 MST"))
 		} else {
 			tp.AddField(strconv.Itoa(p.Number))
 			tp.AddField(p.Status)

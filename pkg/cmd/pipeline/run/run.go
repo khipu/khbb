@@ -44,7 +44,8 @@ custom pipeline from bitbucket-pipelines.yml; --var and --secret-var pass variab
 hides secured values in logs, and khbb never prints them).
 
 The pipeline URL is printed on stdout. With --watch, khbb then follows the pipeline and exits
-with status 1 if it does not succeed.`,
+with status 1 if it ends failed, error, stopped or expired (a pipeline paused on a manual step
+exits 0).`,
 		Example: `  $ khbb pipeline run
   $ khbb pipeline run --custom deploy --var ENV=staging --secret-var TOKEN="$TOKEN" --watch
   $ khbb pipeline run --tag v1.2.0 --dry-run`,

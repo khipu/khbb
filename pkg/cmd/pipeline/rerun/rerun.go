@@ -40,7 +40,10 @@ func NewCmdRerun(f *cmdutil.Factory, runF func(*RerunOptions) error) *cobra.Comm
 		Long: `Start a new pipeline on the same commit and with the same definition as an earlier one — for a
 pull-request pipeline, on the same pull request. Bitbucket never returns a pipeline's variables,
 so they cannot be copied: pass them again with --var and --secret-var. Without an argument, rerun
-the newest pipeline of the current branch.`,
+the newest pipeline of the current branch.
+
+With --watch, khbb then follows the pipeline and exits with status 1 if it ends failed, error,
+stopped or expired (a pipeline paused on a manual step exits 0).`,
 		Example: `  $ khbb pipeline rerun 42 --watch
   $ khbb pipeline rerun 45 --var ENV=staging --secret-var TOKEN="$TOKEN"`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),

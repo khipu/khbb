@@ -97,7 +97,11 @@ func RenderSummary(ios *iostreams.IOStreams, p Pipeline, steps []Step, verbose b
 		}
 		tp.EndRow()
 	}
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "\n%s\n", ios.Gray("View this pipeline on Bitbucket: "+p.URL))
+	return nil
 }
 
 func stepDuration(s Step) string {
