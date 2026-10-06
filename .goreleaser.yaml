@@ -80,3 +80,19 @@ scoops:
     description: Bitbucket Cloud CLI for pull requests and pipelines
     license: MIT
     skip_upload: auto
+
+# Signs and notarizes the macOS binaries with Khipu's Developer ID, only when the signing secrets
+# are present (an empty or missing MACOS_SIGN_P12 skips it, so releases also work without them).
+notarize:
+  macos:
+    - enabled: '{{ if index .Env "MACOS_SIGN_P12" }}true{{ else }}false{{ end }}'
+      ids: [khbb]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
