@@ -107,23 +107,14 @@ func runRun(ctx context.Context, opts *RunOptions) error {
 	if err != nil {
 		return err
 	}
-	if raw.Target.Selector == nil {
-		raw.Target.Selector = target.Selector // Bitbucket fills it in only after parsing the YAML
-	}
-	p := shared.NewPipeline(raw, repo)
+	p := shared.Started(raw, target.Selector, repo)
 	if err := shared.ReportStarted(opts.IO, opts.Exporter, p, shared.RefLabel(p)); err != nil {
 		return err
 	}
 	if !opts.Watch {
 		return nil
 	}
-	final, _, err := shared.Watch(ctx, shared.WatchOptions{
-		IO: opts.IO, Client: client, Repo: repo, Number: p.Number, Interval: 5 * time.Second, Sleep: opts.Sleep,
-	})
-	if err != nil {
-		return err
-	}
-	return shared.ExitStatus(final)
+	return shared.WatchStarted(ctx, opts.IO, client, repo, p.Number, opts.Sleep)
 }
 
 // runTarget builds the pipeline target from --branch, --commit, --tag and --custom. A commit target

@@ -97,10 +97,7 @@ func rerunRun(ctx context.Context, opts *RerunOptions) error {
 	if err != nil {
 		return err
 	}
-	if raw.Target.Selector == nil {
-		raw.Target.Selector = original.Target.Selector // Bitbucket fills it in only after parsing the YAML
-	}
-	p := shared.NewPipeline(raw, repo)
+	p := shared.Started(raw, original.Target.Selector, repo)
 	what := fmt.Sprintf("a rerun of #%d, %s", original.BuildNumber, shared.RefLabel(p))
 	if err := shared.ReportStarted(opts.IO, opts.Exporter, p, what); err != nil {
 		return err
@@ -108,11 +105,5 @@ func rerunRun(ctx context.Context, opts *RerunOptions) error {
 	if !opts.Watch {
 		return nil
 	}
-	final, _, err := shared.Watch(ctx, shared.WatchOptions{
-		IO: opts.IO, Client: client, Repo: repo, Number: p.Number, Interval: 5 * time.Second, Sleep: opts.Sleep,
-	})
-	if err != nil {
-		return err
-	}
-	return shared.ExitStatus(final)
+	return shared.WatchStarted(ctx, opts.IO, client, repo, p.Number, opts.Sleep)
 }
