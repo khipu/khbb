@@ -50,9 +50,10 @@ No personal data is recorded here: only endpoint shapes, field names and enum va
   `custom_merge_check`, `merge_queue_check`). Use it in `pr merge --dry-run` and to
   explain blocked merges (Plan 2).
 - **Merge strategies:** `merge_commit`, `squash`, `fast_forward`,
-  `squash_fast_forward`, `rebase_fast_forward`, `rebase_merge`. v1 exposes
-  `--merge`, `--squash`, `--fast-forward`; Plan 2 adds `--strategy <name>` for the
-  other three.
+  `squash_fast_forward`, `rebase_fast_forward`, `rebase_merge`. v1 ships only
+  `--merge`, `--squash` and `--fast-forward` (spec §7.1); the other three
+  (`squash_fast_forward`, `rebase_fast_forward`, `rebase_merge`) are reachable
+  through `khbb api` for now.
 - **Commit status** `state`: `SUCCESSFUL`, `FAILED`, `INPROGRESS`, `STOPPED`.
 - **Participant** `state`: `approved`, `changes_requested`, `null` (→ khbb `pending`).
 
@@ -117,7 +118,7 @@ declined). Shapes and status codes only.
 | Merge, async | `?async=true` → **202**, body `""`, `Location: …/merge/task-status/<uuid>`. Polling gives `{task_status: PENDING\|SUCCESS, merge_result: <PR>}`. A merge that fails in the task (conflicts) → task-status **400** with the same error as sync. An **unknown task id → 200 PENDING forever**. | `pr merge` always calls `?async=true` and polls task-status with the 2-minute deadline of spec §7.1 — one code path for fast and slow merges, and a sync 555 timeout leaves the merge state unknown. Never poll without a deadline. |
 | Merge errors | Invalid strategy → 400 `fields.merge_strategy`. Already merged/declined → 400 `fields.newstatus` "already closed". Fast-forward not possible → 400 "Unable to fast forward due to changes in the destination branch." Conflicts → 400 "You can't merge until you resolve all merge conflicts." | Exit 1 with the API message; check `mergeability/checks` first to give a better error. |
 | Mergeability | `GET …/mergeability/checks` → `{size, values: [{type, status: PASSED\|FAILED, required, blocking, reason, state?}]}`. Types seen: `pullrequest_state_check`, `current_user_permission_check`, `git_mergeability_check` (`reason: clean\|conflicts`, `blocking: true` on conflict). | `pr merge` pre-checks it and fails fast on any `blocking` check. |
-| Merge strategies | Not in the default PR payload. `GET …/pullrequests/{id}?fields=%2Bdestination.branch.merge_strategies,%2Bdestination.branch.default_merge_strategy` adds `merge_strategies` (allowed list) and `default_merge_strategy`. The merge body's own default is `merge_commit`, which may differ from the repository's default. `branching-model/settings` needs `repository:admin` (403). | `pr merge` without a strategy flag sends the PR's `default_merge_strategy`; a flag outside `merge_strategies` fails before the request with the allowed list. |
+| Merge strategies | Not in the default PR payload. `GET …/pullrequests/{id}?fields=%2Bdestination.branch.merge_strategies,%2Bdestination.branch.default_merge_strategy` adds `merge_strategies` (allowed list) and `default_merge_strategy`. The merge body's own default is `merge_commit`, which may differ from the repository's default. `branching-model/settings` needs `repository:admin` (403). `GET …/pullrequests/{id}?fields=destination.branch.*` (the form khbb uses) also returns `destination.branch` with `default_merge_strategy`, `merge_strategies` and `name` (verified sandbox PRs #9 and #10, and earlier on another Khipu repository); without `fields` only `name` comes back. | `pr merge` without a strategy flag sends the PR's `default_merge_strategy`; a flag outside `merge_strategies` fails before the request with the allowed list. |
 | HTML error pages | `GET repositories/{ws}/{missing-repo}/commits/<rev>` → **404 `text/html`**, a ~25 KB web page that embeds the caller's profile data and a short-lived web token. Other paths on a missing repo return JSON 404s. | **Never print a non-JSON error body** (Plan 2b, first task): `khbb api` and the error renderer drop `text/html` bodies and print a one-line note instead. |
 | Error hint | For field errors the hint repeats the message verbatim. | Cosmetic; drop the hint when it equals the message. |
 
