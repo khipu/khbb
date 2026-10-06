@@ -62,8 +62,9 @@ homebrew_casks:
       shell_parameter_format: cobra
       shells: [bash, zsh, fish]
     hooks:
-      post:
-        # The binaries are not signed or notarized; without this, macOS refuses to run them.
+      pre:
+        # The binaries are not signed or notarized; without this, macOS refuses to run them, including
+        # when Homebrew runs `khbb completion <shell>` to generate the completions.
         install: |
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/khbb"]

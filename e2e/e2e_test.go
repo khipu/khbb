@@ -27,7 +27,7 @@ var khbbBin string
 
 func TestMain(m *testing.M) {
 	if os.Getenv("KHBB_E2E") != "1" {
-		os.Exit(m.Run()) // every test skips itself
+		os.Exit(m.Run()) // the live test skips itself
 	}
 	dir, err := os.MkdirTemp("", "khbb-e2e-")
 	if err != nil {
@@ -47,20 +47,25 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// checkSandboxRepo refuses repositories that are not sandboxes: the tests write to the repository.
-func checkSandboxRepo(repo string) error {
-	if !strings.Contains(strings.ToLower(repo), "sandbox") {
-		return fmt.Errorf("KHBB_E2E_REPO=%q: the end-to-end tests open pull requests and run pipelines, so they only run against a repository whose name contains \"sandbox\"", repo)
+// checkSandbox refuses a repository or remote that is not a sandbox: the tests write to it. name is
+// the environment variable that supplied value, for the error message.
+func checkSandbox(name, value string) error {
+	if !strings.Contains(strings.ToLower(value), "sandbox") {
+		return fmt.Errorf("%s=%q: the end-to-end tests open pull requests and run pipelines, so they only run against a repository whose name contains \"sandbox\"", name, value)
 	}
 	return nil
 }
 
-func TestCheckSandboxRepo(t *testing.T) {
-	if err := checkSandboxRepo("khipu/khipubb-sandbox"); err != nil {
+func TestCheckSandbox(t *testing.T) {
+	if err := checkSandbox("KHBB_E2E_REPO", "khipu/khipubb-sandbox"); err != nil {
 		t.Error(err)
 	}
-	if err := checkSandboxRepo("khipu/payments"); err == nil {
-		t.Error("a repository that is not a sandbox must be refused")
+	if err := checkSandbox("KHBB_E2E_REMOTE", "git@bitbucket.org:khipu/khipubb-sandbox.git"); err != nil {
+		t.Error(err)
+	}
+	err := checkSandbox("KHBB_E2E_REMOTE", "git@bitbucket.org:khipu/payments.git")
+	if err == nil || !strings.Contains(err.Error(), "KHBB_E2E_REMOTE=") {
+		t.Errorf("a remote that is not a sandbox must be refused, got %v", err)
 	}
 }
 
@@ -74,7 +79,7 @@ func sandbox(t *testing.T) string {
 	if repo == "" {
 		repo = defaultRepo
 	}
-	if err := checkSandboxRepo(repo); err != nil {
+	if err := checkSandbox("KHBB_E2E_REPO", repo); err != nil {
 		t.Fatal(err)
 	}
 	return repo
@@ -154,6 +159,9 @@ func TestPullRequestAndPipelineLifecycle(t *testing.T) {
 	remote := os.Getenv("KHBB_E2E_REMOTE")
 	if remote == "" {
 		remote = "git@bitbucket.org:" + repo + ".git"
+	}
+	if err := checkSandbox("KHBB_E2E_REMOTE", remote); err != nil {
+		t.Fatal(err)
 	}
 	clone := filepath.Join(t.TempDir(), "sandbox")
 	git(t, "", "clone", "-q", "--depth", "1", remote, clone)

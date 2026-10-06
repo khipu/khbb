@@ -14,16 +14,19 @@ that installed it; after upgrading khbb, `khbb skill install --force` refreshes 
 1. Run `khbb auth status`. Exit status 4 means khbb is not logged in or its token was rejected: ask
    the human to run `khbb auth login` in their own terminal. Never ask for the token, never put it
    in a command, and never read it from the keyring or from khbb's config file.
-2. khbb finds the repository from the git remotes of the current directory (`origin` first).
-   Anywhere else, pass `-R workspace/repo`.
+2. khbb finds the repository from the git remotes of the current directory (`origin` first), but
+   `KHBB_REPO`, when set, wins. Anywhere else, or to be sure, pass `-R workspace/repo`.
 3. Without a number, commands act on the current branch: its open pull request (`pr view`,
    `pr checks`, `pr merge`, ...) or its newest pipeline (`pipeline view`, `pipeline logs`, ...).
-   Pull requests and pipelines are otherwise named by number (`42` or `#42`) or by their URL.
+   Pull requests and pipelines are otherwise named by their number (`42`) or their URL. Write the
+   plain number: unquoted, `#42` starts a shell comment, and the command would act on the current
+   branch instead.
 
 ## Rules
 
 - **Read with JSON.** Use `--json <fields>` and filter with `--jq`; never parse the tables meant for
-  people. `--json` without fields lists the available ones. Ask only for the fields you need.
+  people. `--json` without fields lists the available ones on stderr and exits 1. Ask only for the
+  fields you need.
 - **Check the exit status before you use stdout.** stdout carries only data; notices and errors go
   to stderr. With `--json`, an error is one JSON line on stderr, such as
   `{"error":{"code":"not_found","status":404,"message":"...","hint":"..."}}`. `khbb api` also
@@ -36,7 +39,8 @@ that installed it; after upgrading khbb, `khbb skill install --force` refreshes 
 - **Approving or requesting changes speaks for the human** whose token khbb uses. Do it only when
   they ask you to.
 - **`khbb api` is read-only for you.** Use GET unless the human approved that exact mutating call;
-  show it with `--dry-run` first.
+  show it with `--dry-run` first. Fields (`-f`, `-F`) and `--input` turn a request into a POST: add
+  `-X GET` to send fields as query parameters.
 - **Keep secrets out of commands.** Pass secret pipeline variables with
   `--secret-var NAME="$ENV_VAR"`, never with `--var` and never as a literal value. khbb never
   prints them.
