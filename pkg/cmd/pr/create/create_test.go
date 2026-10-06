@@ -279,6 +279,7 @@ func TestCreate_FillErrors(t *testing.T) {
 	}
 	for name, outputs := range cases {
 		reg := httpmock.New(t)
+		noOpenPR(reg)
 		f, _, _, _ := prtest.NewFactory(reg)
 		prtest.SetGit(f, gitWith(outputs))
 		err := prtest.Run(NewCmdCreate(f, nil), "--fill", "-B", "main", "--no-default-reviewers")

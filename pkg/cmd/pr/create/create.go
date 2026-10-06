@@ -82,6 +82,8 @@ base branch (one commit: its message; several: the branch name and a list of sub
 				return cmdutil.FlagErrorf("--head required when using the --repo flag")
 			case opts.BodySet && opts.BodyFile != "":
 				return cmdutil.FlagErrorf("specify only one of --body and --body-file")
+			case fl.Changed("title") && strings.TrimSpace(opts.Title) == "":
+				return cmdutil.FlagErrorf("the title cannot be empty")
 			case opts.Head != "" && opts.Head == opts.Base:
 				return cmdutil.FlagErrorf("the head and base branches are both %q", opts.Head)
 			}
@@ -143,14 +145,14 @@ func createRun(ctx context.Context, opts *CreateOptions) error {
 	if head == base {
 		return cmdutil.FlagErrorf("the head and base branches are both %q", head)
 	}
-	title, body, err := titleAndBody(opts, repo, head, base)
-	if err != nil {
-		return err
-	}
 	if err := checkNoOpenPR(ctx, client, repo, head, base); err != nil {
 		return err
 	}
 	reviewers, err := reviewerUUIDs(ctx, client, repo, opts)
+	if err != nil {
+		return err
+	}
+	title, body, err := titleAndBody(opts, repo, head, base)
 	if err != nil {
 		return err
 	}
@@ -349,7 +351,7 @@ func explainCreateError(err error, head string) error {
 	if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
 		for _, msg := range httpErr.Fields["source"] {
 			if strings.Contains(msg, "branch not found") {
-				return &cmdutil.NotFoundError{Msg: fmt.Sprintf("branch %q is not on Bitbucket; push it first, for example with `git push -u origin %s`", head, head)}
+				return &cmdutil.NotFoundError{Msg: fmt.Sprintf("branch %q is not on Bitbucket; push it first (git push -u <remote> %s)", head, head)}
 			}
 		}
 	}
