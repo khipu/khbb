@@ -41,6 +41,12 @@ type NotFoundError struct{ Msg string }
 
 func (e *NotFoundError) Error() string { return e.Msg }
 
+// ConflictError means the resource is in a state that does not allow the action, such as a pull
+// request that is no longer open.
+type ConflictError struct{ Msg string }
+
+func (e *ConflictError) Error() string { return e.Msg }
+
 // ExitError ends the command with Code without printing anything.
 type ExitError struct{ Code int }
 
@@ -59,12 +65,13 @@ type ErrorInfo struct {
 // Classify maps an error to its code, message, hint and process exit code.
 func Classify(err error) ErrorInfo {
 	var (
-		flagErr  *FlagError
-		authErr  *AuthError
-		exitErr  *ExitError
-		notFound *NotFoundError
-		httpErr  *bitbucket.HTTPError
-		netErr   *bitbucket.NetworkError
+		flagErr   *FlagError
+		authErr   *AuthError
+		exitErr   *ExitError
+		notFound  *NotFoundError
+		conflict  *ConflictError
+		httpErr   *bitbucket.HTTPError
+		netErr    *bitbucket.NetworkError
 	)
 	switch {
 	case errors.Is(err, bitbucket.ErrDryRun):
@@ -81,6 +88,8 @@ func Classify(err error) ErrorInfo {
 		return ErrorInfo{Code: "auth_required", Message: err.Error(), Hint: "run `khbb auth login`", Exit: 4}
 	case errors.As(err, &notFound):
 		return ErrorInfo{Code: "not_found", Message: err.Error(), Exit: 1}
+	case errors.As(err, &conflict):
+		return ErrorInfo{Code: "conflict", Message: err.Error(), Exit: 1}
 	case errors.As(err, &httpErr):
 		return classifyHTTP(httpErr)
 	case errors.As(err, &netErr):

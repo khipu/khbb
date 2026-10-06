@@ -41,6 +41,7 @@ func TestClassify(t *testing.T) {
 		{"429", &bitbucket.HTTPError{StatusCode: 429}, "rate_limited", 1, 429, "", false},
 		{"555", &bitbucket.HTTPError{StatusCode: 555}, "server_error", 1, 555, "retry later", false},
 		{"not found", &cmdutil.NotFoundError{Msg: `no open pull request found for branch "feature/widgets" in acme/widgets`}, "not_found", 1, 0, "", false},
+		{"conflict state", &cmdutil.ConflictError{Msg: "pull request #42 is merged; only open pull requests can be approved"}, "conflict", 1, 0, "", false},
 		{"network", &bitbucket.NetworkError{Err: errors.New("dial tcp: i/o timeout")}, "network", 1, 0, "", false},
 		{"other", errors.New("boom"), "error", 1, 0, "", false},
 	}

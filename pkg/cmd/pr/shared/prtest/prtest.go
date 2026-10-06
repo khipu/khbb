@@ -3,9 +3,12 @@ package prtest
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
+	"testing"
 
 	"github.com/spf13/cobra"
 
@@ -29,6 +32,12 @@ const (
 
 // PRs is the request path of acme/widgets pull requests.
 const PRs = "/2.0/repositories/acme/widgets/pullrequests"
+
+// Repo and Members are the request paths of the acme/widgets repository and the acme workspace's members.
+const (
+	Repo    = "/2.0/repositories/acme/widgets"
+	Members = "/2.0/workspaces/acme/members"
+)
 
 // PR42 is an open pull request by ada from feature/widgets into main; bob approved, cy has not reviewed.
 const PR42 = `{"id":42,"title":"Add widgets","description":"Adds the widget factory.","state":"OPEN","draft":false,"author":` + Ada +
@@ -87,15 +96,16 @@ func Page(items ...string) string {
 	return `{"values":[` + strings.Join(items, ",") + `],"pagelen":50}`
 }
 
-// NewFactory returns a non-TTY Factory bound to acme/widgets whose client talks to reg without retries.
+// NewFactory returns a non-TTY Factory bound to acme/widgets whose client talks to reg without
+// retries. The client honors f.DryRun (--dry-run), printing to the returned stdout buffer.
 func NewFactory(reg *httpmock.Registry) (*cmdutil.Factory, *iostreams.IOStreams, *bytes.Buffer, *bytes.Buffer) {
 	ios, _, out, errOut := iostreams.Test()
-	f := &cmdutil.Factory{
-		IOStreams:    ios,
-		RepoOverride: "acme/widgets",
-		HTTPClient: func() (*bitbucket.Client, error) {
-			return bitbucket.New(bitbucket.Options{Email: "dev@example.com", Token: "t", HTTPClient: reg.Client(), MaxAttempts: 1}), nil
-		},
+	f := &cmdutil.Factory{IOStreams: ios, RepoOverride: "acme/widgets"}
+	f.HTTPClient = func() (*bitbucket.Client, error) {
+		return bitbucket.New(bitbucket.Options{
+			Email: "dev@example.com", Token: "t", HTTPClient: reg.Client(), MaxAttempts: 1,
+			DryRun: f.DryRun, DryRunOut: ios.Out,
+		}), nil
 	}
 	return f, ios, out, errOut
 }
@@ -116,4 +126,48 @@ func Run(cmd *cobra.Command, args ...string) error {
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 	return cmd.Execute()
+}
+
+// SetTTY makes every stream of ios behave like a terminal.
+func SetTTY(ios *iostreams.IOStreams) {
+	ios.SetStdinTTY(true)
+	ios.SetStdoutTTY(true)
+	ios.SetStderrTTY(true)
+}
+
+// WithState returns a pull request fixture with the pull request's state replaced, such as
+// WithState(PR42, "MERGED"). Participant states are left alone.
+func WithState(pr, state string) string {
+	return strings.Replace(pr, `"state":"OPEN"`, `"state":"`+state+`"`, 1)
+}
+
+// Member wraps an account fixture in a workspace membership, as GET /workspaces/{ws}/members returns it.
+func Member(user string) string {
+	return `{"type":"workspace_membership","user":` + user + `}`
+}
+
+// Writes returns the requests reg received that change something: every method but GET.
+func Writes(reg *httpmock.Registry) []httpmock.Call {
+	var writes []httpmock.Call
+	for _, c := range reg.Calls {
+		if c.Method != "GET" {
+			writes = append(writes, c)
+		}
+	}
+	return writes
+}
+
+// AssertJSONBody fails t unless the request body is the JSON value want (key order and spacing ignored).
+func AssertJSONBody(t testing.TB, c httpmock.Call, want string) {
+	t.Helper()
+	var got, exp any
+	if err := json.Unmarshal(c.Body, &got); err != nil {
+		t.Fatalf("request body %q: %v", c.Body, err)
+	}
+	if err := json.Unmarshal([]byte(want), &exp); err != nil {
+		t.Fatalf("bad expectation %q: %v", want, err)
+	}
+	if !reflect.DeepEqual(got, exp) {
+		t.Errorf("request body = %s, want %s", c.Body, want)
+	}
 }
