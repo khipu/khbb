@@ -19,6 +19,10 @@ import (
 // headWait is how long watch waits, after a push, for a pipeline of the local HEAD commit to start.
 const headWait = 60 * time.Second
 
+// maxConsecutiveErrors is how many failed lists in a row the HEAD-commit wait accepts: it gives up
+// on the 5th consecutive transient failure (spec §10).
+const maxConsecutiveErrors = 5
+
 // WatchOptions holds the inputs and dependencies of `khbb pipeline watch`.
 type WatchOptions struct {
 	IO         *iostreams.IOStreams
@@ -127,13 +131,22 @@ func resolve(ctx context.Context, client *bitbucket.Client, opts *WatchOptions, 
 	if err != nil {
 		return 0, repo, err
 	}
+	errorsInARow := 0
 	for waited := time.Duration(0); ; waited += interval {
 		ps, err := client.ListPipelines(ctx, repo.Workspace, repo.Slug, bitbucket.PipelineListOptions{Branch: branch, CommitHash: head}, 1)
-		if err != nil {
+		switch {
+		case err != nil && !bitbucket.IsTransient(err):
 			return 0, repo, err
-		}
-		if len(ps) > 0 {
-			return ps[0].BuildNumber, repo, nil
+		case err != nil:
+			errorsInARow++
+			if errorsInARow >= maxConsecutiveErrors {
+				return 0, repo, err
+			}
+		default:
+			errorsInARow = 0
+			if len(ps) > 0 {
+				return ps[0].BuildNumber, repo, nil
+			}
 		}
 		if waited >= headWait {
 			return 0, repo, &cmdutil.NotFoundError{Msg: fmt.Sprintf("no pipeline started for commit %s on branch %q within %s; push it, or name a pipeline number",

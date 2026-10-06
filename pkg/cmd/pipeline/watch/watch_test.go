@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/internal/httpmock"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/shared/ptest"
@@ -99,6 +100,32 @@ func TestWatch_NoPipelineForTheHeadCommit(t *testing.T) {
 	if !errors.As(r.err, &notFound) || len(r.slept) != 12 ||
 		r.err.Error() != `no pipeline started for commit abc1234 on branch "feature/widgets" within 1m0s; push it, or name a pipeline number` {
 		t.Errorf("err %v slept %d", r.err, len(r.slept))
+	}
+}
+
+func TestWatch_HeadWaitRetriesTransientErrors(t *testing.T) {
+	reg := httpmock.New(t)
+	reg.Register("GET", ptest.Pipelines, httpmock.JSONResponse(503, `{"type":"error","error":{"message":"Service unavailable"}}`))
+	reg.Register("GET", ptest.Pipelines, httpmock.JSONResponse(200, prtest.Page(ptest.Pipeline(43, ptest.StatePending))))
+	finished(reg, 43, ptest.StateSuccessful)
+
+	r := run(t, reg, headGit, "--exit-status")
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	if !slices.Equal(r.slept, []time.Duration{5 * time.Second}) || !strings.HasSuffix(r.out, "#43 successful (1m02s)\n") {
+		t.Errorf("slept %v out %q", r.slept, r.out)
+	}
+}
+
+func TestWatch_HeadWaitReturnsNonTransientErrorImmediately(t *testing.T) {
+	reg := httpmock.New(t)
+	reg.Register("GET", ptest.Pipelines, httpmock.JSONResponse(404, `{"type":"error","error":{"message":"Repository acme/widgets not found"}}`))
+
+	r := run(t, reg, headGit, "--exit-status")
+	var httpErr *bitbucket.HTTPError
+	if !errors.As(r.err, &httpErr) || httpErr.StatusCode != 404 || len(r.slept) != 0 {
+		t.Errorf("err %v slept %v", r.err, r.slept)
 	}
 }
 
