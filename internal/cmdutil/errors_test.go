@@ -106,3 +106,14 @@ func TestPrintError_SilentErrors(t *testing.T) {
 		t.Errorf("silent errors printed %q", errOut.String())
 	}
 }
+
+func TestClassify_FieldHintThatRepeatsTheMessage(t *testing.T) {
+	err := &bitbucket.HTTPError{
+		StatusCode: 400,
+		Message:    "source: branch not found: feature/x",
+		Fields:     map[string][]string{"source": {"branch not found: feature/x"}},
+	}
+	if info := cmdutil.Classify(err); info.Code != "validation" || info.Hint != "" {
+		t.Errorf("Classify = %+v, want validation without a hint that repeats the message", info)
+	}
+}

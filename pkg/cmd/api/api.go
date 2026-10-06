@@ -185,7 +185,7 @@ func apiRun(ctx context.Context, opts *APIOptions) error {
 	}
 	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
 	if !ok {
-		_ = writeBody(opts, resp.Header.Get("Content-Type"), data, false)
+		writeErrorBody(opts, resp.Header.Get("Content-Type"), data)
 		return bitbucket.ParseHTTPError(resp, data)
 	}
 	return writeBody(opts, resp.Header.Get("Content-Type"), data, true)
@@ -206,7 +206,7 @@ func paginate(ctx context.Context, client *bitbucket.Client, path string, header
 			return err
 		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			_ = writeBody(opts, resp.Header.Get("Content-Type"), data, false)
+			writeErrorBody(opts, resp.Header.Get("Content-Type"), data)
 			return bitbucket.ParseHTTPError(resp, data)
 		}
 		var page struct {
@@ -385,4 +385,21 @@ func writeBody(opts *APIOptions, contentType string, data []byte, filter bool) e
 		_, err := opts.IO.Out.Write(data)
 		return err
 	}
+}
+
+// writeErrorBody prints a JSON error body unfiltered, as gh does. Any other body is dropped: some
+// Bitbucket errors are web pages that embed the caller's profile and a short-lived web token.
+func writeErrorBody(opts *APIOptions, contentType string, data []byte) {
+	if opts.Silent || len(data) == 0 {
+		return
+	}
+	if strings.Contains(contentType, "json") || (contentType == "" && json.Valid(data)) {
+		_ = writeBody(opts, contentType, data, false)
+		return
+	}
+	kind, _, _ := strings.Cut(contentType, ";")
+	if kind = strings.TrimSpace(kind); kind == "" {
+		kind = "non-JSON"
+	}
+	fmt.Fprintf(opts.IO.ErrOut, "note: the %s error body (%d bytes) was not printed\n", kind, len(data))
 }

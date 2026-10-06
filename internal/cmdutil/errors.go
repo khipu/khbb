@@ -128,7 +128,10 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 		info.Hint = e.Detail
 	}
 	if info.Hint == "" && len(e.Fields) > 0 {
-		info.Hint = formatFields(e.Fields)
+		// Bitbucket often repeats its only field error as the message; such a hint adds nothing.
+		if hint := formatFields(e.Fields); hint != e.Message {
+			info.Hint = hint
+		}
 	}
 	return info
 }

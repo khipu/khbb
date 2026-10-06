@@ -324,3 +324,55 @@ func TestNewCmdAPI_Validation(t *testing.T) {
 		}
 	}
 }
+
+func TestAPI_NonJSONErrorBodyIsNotPrinted(t *testing.T) {
+	opts, reg, _, out := newOpts(t)
+	errOut := opts.IO.ErrOut.(*bytes.Buffer)
+	opts.Path = "repositories/acme/nope/commits/main"
+	page := "<!DOCTYPE html><html><body>ada@example.com apitoken=s3cret</body></html>"
+	reg.Register("GET", "/2.0/repositories/acme/nope/commits/main",
+		httpmock.WithHeader(httpmock.StringResponse(404, page), "Content-Type", "text/html; charset=utf-8"))
+
+	err := apiRun(context.Background(), opts)
+	var httpErr *bitbucket.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != 404 {
+		t.Fatalf("err = %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("an HTML error page must never be printed, got %q", out.String())
+	}
+	if !strings.HasPrefix(errOut.String(), "note: the text/html error body (") || strings.Contains(errOut.String(), "s3cret") {
+		t.Errorf("stderr = %q", errOut.String())
+	}
+}
+
+func TestAPI_PaginateNonJSONErrorBodyIsNotPrinted(t *testing.T) {
+	opts, reg, _, out := newOpts(t)
+	opts.Path = "repositories/acme/nope/commits/main"
+	opts.Paginate = true
+	reg.Register("GET", "/2.0/repositories/acme/nope/commits/main",
+		httpmock.WithHeader(httpmock.StringResponse(404, "<html>s3cret</html>"), "Content-Type", "text/html"))
+
+	if err := apiRun(context.Background(), opts); err == nil {
+		t.Fatal("expected an error")
+	}
+	if strings.Contains(out.String(), "s3cret") {
+		t.Errorf("out = %q", out.String())
+	}
+}
+
+func TestAPI_SilentDropsTheNote(t *testing.T) {
+	opts, reg, _, out := newOpts(t)
+	errOut := opts.IO.ErrOut.(*bytes.Buffer)
+	opts.Path = "repositories/acme/nope/commits/main"
+	opts.Silent = true
+	reg.Register("GET", "/2.0/repositories/acme/nope/commits/main",
+		httpmock.WithHeader(httpmock.StringResponse(404, "<html></html>"), "Content-Type", "text/html"))
+
+	if err := apiRun(context.Background(), opts); err == nil {
+		t.Fatal("expected an error")
+	}
+	if out.Len() != 0 || errOut.Len() != 0 {
+		t.Errorf("out %q stderr %q", out.String(), errOut.String())
+	}
+}
