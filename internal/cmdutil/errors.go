@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -13,6 +14,11 @@ import (
 	"github.com/khipu/khbb/internal/bitbucket"
 	"github.com/khipu/khbb/internal/iostreams"
 )
+
+// pipelinePathRE matches a pipelines path segment directly under a repository, such as
+// /repositories/acme/widgets/pipelines or .../pipelines/42 — not a repository or workspace whose
+// name merely starts with "pipelines" (e.g. acme/pipelines-tools).
+var pipelinePathRE = regexp.MustCompile(`/repositories/[^/]+/[^/]+/pipelines(?:[/?]|$)`)
 
 // FlagError is a usage error: wrong or missing flags or arguments.
 type FlagError struct{ Err error }
@@ -114,7 +120,7 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 	case e.StatusCode == 404:
 		info.Code = "not_found"
 		switch {
-		case strings.Contains(e.URL, "/pipelines"):
+		case pipelinePathRE.MatchString(e.URL):
 			// Pipeline 404s name what is missing (a build number, a branch, a tag); a repository hint would mislead.
 		case strings.Contains(e.URL, "/pullrequests/"):
 			info.Hint = "check the pull request number and that it belongs to this repository"

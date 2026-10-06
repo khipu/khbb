@@ -67,6 +67,8 @@ func TestClassify_404HintOnlyForRepositories(t *testing.T) {
 
 const repoNotFoundHint = "check the repository name and your access: private repositories return 404 when you lack access"
 
+const pullRequestNotFoundHint = "check the pull request number and that it belongs to this repository"
+
 func repoNotFound() *bitbucket.HTTPError {
 	return &bitbucket.HTTPError{StatusCode: 404, Message: "Repository acme/nope not found", URL: "https://api.bitbucket.org/2.0/repositories/acme/nope"}
 }
@@ -124,5 +126,18 @@ func TestClassify_NoRepositoryHintForPipelines(t *testing.T) {
 		URL: "https://api.bitbucket.org/2.0/repositories/acme/widgets/pipelines"}
 	if info := cmdutil.Classify(err); info.Code != "not_found" || info.Hint != "" {
 		t.Errorf("Classify = %+v, want not_found without a hint", info)
+	}
+}
+
+func TestClassify_RepositoryNamedPipelinesToolsStillGetsHints(t *testing.T) {
+	pr := &bitbucket.HTTPError{StatusCode: 404, Message: "Not Found",
+		URL: "https://api.bitbucket.org/2.0/repositories/acme/pipelines-tools/pullrequests/9"}
+	if info := cmdutil.Classify(pr); info.Code != "not_found" || info.Hint != pullRequestNotFoundHint {
+		t.Errorf("Classify = %+v, want the pull request hint", info)
+	}
+	repo := &bitbucket.HTTPError{StatusCode: 404, Message: "Not Found",
+		URL: "https://api.bitbucket.org/2.0/repositories/acme/pipelines-tools"}
+	if info := cmdutil.Classify(repo); info.Code != "not_found" || info.Hint != repoNotFoundHint {
+		t.Errorf("Classify = %+v, want the repository hint", info)
 	}
 }
