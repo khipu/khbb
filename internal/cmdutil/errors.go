@@ -65,13 +65,13 @@ type ErrorInfo struct {
 // Classify maps an error to its code, message, hint and process exit code.
 func Classify(err error) ErrorInfo {
 	var (
-		flagErr   *FlagError
-		authErr   *AuthError
-		exitErr   *ExitError
-		notFound  *NotFoundError
-		conflict  *ConflictError
-		httpErr   *bitbucket.HTTPError
-		netErr    *bitbucket.NetworkError
+		flagErr  *FlagError
+		authErr  *AuthError
+		exitErr  *ExitError
+		notFound *NotFoundError
+		conflict *ConflictError
+		httpErr  *bitbucket.HTTPError
+		netErr   *bitbucket.NetworkError
 	)
 	switch {
 	case errors.Is(err, bitbucket.ErrDryRun):

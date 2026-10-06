@@ -112,7 +112,9 @@ func TestReviewActions(t *testing.T) {
 	}{
 		{"approve", func(c *bitbucket.Client) error { return c.ApprovePR(context.Background(), "acme", "widgets", 42) }, "POST", prPath + "/42/approve", 200},
 		{"unapprove", func(c *bitbucket.Client) error { return c.UnapprovePR(context.Background(), "acme", "widgets", 42) }, "DELETE", prPath + "/42/approve", 204},
-		{"request changes", func(c *bitbucket.Client) error { return c.RequestChangesPR(context.Background(), "acme", "widgets", 42) }, "POST", prPath + "/42/request-changes", 200},
+		{"request changes", func(c *bitbucket.Client) error {
+			return c.RequestChangesPR(context.Background(), "acme", "widgets", 42)
+		}, "POST", prPath + "/42/request-changes", 200},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
