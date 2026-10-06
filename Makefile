@@ -3,10 +3,12 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
-.PHONY: build test lint
+.PHONY: build test lint e2e
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/khbb ./cmd/khbb
 test:
 	go test ./...
 lint:
 	golangci-lint run
+e2e:
+	KHBB_E2E=1 go test ./e2e -count=1 -v -timeout 15m
