@@ -6,6 +6,7 @@ import (
 
 	"github.com/khipu/khbb/internal/cmdutil"
 	"github.com/khipu/khbb/pkg/cmd/pipeline/list"
+	"github.com/khipu/khbb/pkg/cmd/pipeline/view"
 )
 
 // NewCmdPipeline returns `khbb pipeline`.
@@ -21,6 +22,7 @@ func NewCmdPipeline(f *cmdutil.Factory) *cobra.Command {
 	cmdutil.EnableRepoOverride(cmd, f)
 	cmd.AddCommand(
 		list.NewCmdList(f, nil),
+		view.NewCmdView(f, nil),
 	)
 	return cmd
 }
