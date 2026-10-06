@@ -126,6 +126,9 @@ completion: `khbb completion bash|zsh|fish|powershell` (Homebrew installs it for
   removing one is a breaking change.
 - **Streams:** stdout carries only data; prompts, progress, warnings and errors go to stderr.
   Without a terminal there are no prompts, colors or truncated tables.
+- **Retries and timeouts:** reads that hit a rate limit (429) or a 502, 503 or 504 are retried up
+  to three times, and each wait is announced on stderr. A response that sends nothing for 60
+  seconds fails with a `network` error; long logs that keep arriving are never cut.
 - **Errors:** `error: <message>` on stderr, or one JSON line with `--json`:
   `{"error":{"code":"not_found","status":404,"message":"...","hint":"..."}}`.
 - **Safety:** every command that changes something on Bitbucket takes `--dry-run`, which prints

@@ -197,3 +197,20 @@ func TestList_RefusesForeignNextHost(t *testing.T) {
 		t.Errorf("made %d calls, want 1", len(reg.Calls))
 	}
 }
+
+func TestRequest_NoticesBeforeEachRetry(t *testing.T) {
+	var notices bytes.Buffer
+	c, reg := newTestClient(t, bitbucket.Options{Notices: &notices})
+	reg.Register("GET", "/2.0/user", httpmock.WithHeader(httpmock.JSONResponse(429, `{}`), "Retry-After", "30"))
+	reg.Register("GET", "/2.0/user", httpmock.StringResponse(503, "unavailable"))
+	reg.Register("GET", "/2.0/user", httpmock.JSONResponse(200, userJSON))
+
+	if _, err := c.CurrentUser(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := "Bitbucket is rate limiting requests (429 Too Many Requests); retrying in 30s (attempt 2 of 3)\n" +
+		"Bitbucket answered 503 Service Unavailable; retrying in 2s (attempt 3 of 3)\n"
+	if notices.String() != want {
+		t.Errorf("notices = %q, want %q", notices.String(), want)
+	}
+}

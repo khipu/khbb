@@ -71,6 +71,7 @@ func newClient(f *cmdutil.Factory) (*bitbucket.Client, error) {
 		UserAgent: "khbb/" + f.AppVersion,
 		DryRun:    f.DryRun,
 		DryRunOut: f.IOStreams.Out,
+		Notices:   f.IOStreams.ErrOut,
 	}
 	if envEnabled("KHBB_DEBUG") {
 		opts.Debug = f.IOStreams.ErrOut

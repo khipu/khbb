@@ -41,7 +41,7 @@ func NewCmdLogin(f *cmdutil.Factory, runF func(*LoginOptions) error) *cobra.Comm
 		Config:   f.Config,
 		Prompter: f.Prompter,
 		NewClient: func(email, token string) *bitbucket.Client {
-			return bitbucket.New(bitbucket.Options{Email: email, Token: token, UserAgent: "khbb/" + f.AppVersion})
+			return bitbucket.New(bitbucket.Options{Email: email, Token: token, UserAgent: "khbb/" + f.AppVersion, Notices: f.IOStreams.ErrOut})
 		},
 		StoreToken:  config.StoreToken,
 		DeleteToken: config.DeleteToken,

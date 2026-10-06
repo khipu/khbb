@@ -30,7 +30,7 @@ func NewCmdStatus(f *cmdutil.Factory, runF func(*StatusOptions) error) *cobra.Co
 		IO:     f.IOStreams,
 		Config: f.Config,
 		NewClient: func(email, token string) *bitbucket.Client {
-			return bitbucket.New(bitbucket.Options{Email: email, Token: token, UserAgent: "khbb/" + f.AppVersion})
+			return bitbucket.New(bitbucket.Options{Email: email, Token: token, UserAgent: "khbb/" + f.AppVersion, Notices: f.IOStreams.ErrOut})
 		},
 		Resolve: config.ResolveCredentials,
 	}

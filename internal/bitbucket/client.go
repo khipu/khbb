@@ -39,6 +39,11 @@ type Options struct {
 	MaxAttempts int
 	// Sleep waits between retries (default time.Sleep).
 	Sleep func(time.Duration)
+	// Notices receives a line before each retry, so a wait is never silent (default: discarded).
+	Notices io.Writer
+	// IdleTimeout fails a response whose body sends nothing for this long (default 60s). Bodies
+	// that keep arriving, such as long logs, are never cut.
+	IdleTimeout time.Duration
 }
 
 // Client talks to the Bitbucket Cloud REST API 2.0.
@@ -73,6 +78,12 @@ func New(opts Options) *Client {
 	}
 	if opts.DryRunOut == nil {
 		opts.DryRunOut = io.Discard
+	}
+	if opts.Notices == nil {
+		opts.Notices = io.Discard
+	}
+	if opts.IdleTimeout <= 0 {
+		opts.IdleTimeout = time.Minute
 	}
 	return &Client{base: base, opts: opts}
 }
@@ -195,19 +206,24 @@ func (c *Client) newRequest(ctx context.Context, method, u string, header http.H
 
 func (c *Client) send(ctx context.Context, method, u string, header http.Header, body []byte) (*http.Response, error) {
 	for attempt := 1; ; attempt++ {
-		req, err := c.newRequest(ctx, method, u, header, body)
+		// Each attempt gets its own context so that a stalled body can be abandoned (idleTimeoutBody).
+		attemptCtx, cancel := context.WithCancel(ctx)
+		req, err := c.newRequest(attemptCtx, method, u, header, body)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 		c.debugRequest(req)
 		start := time.Now()
 		resp, err := c.opts.HTTPClient.Do(req)
 		if err != nil {
+			cancel()
 			return nil, &NetworkError{Err: err}
 		}
 		if resp.Request == nil {
 			resp.Request = req
 		}
+		resp.Body = newIdleTimeoutBody(resp.Body, c.opts.IdleTimeout, cancel)
 		c.debugResponse(resp, time.Since(start))
 		if attempt >= c.opts.MaxAttempts || !isRetryable(method, resp.StatusCode) {
 			return resp, nil
@@ -215,8 +231,18 @@ func (c *Client) send(ctx context.Context, method, u string, header http.Header,
 		wait := retryDelay(resp, attempt)
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
+		fmt.Fprint(c.opts.Notices, retryNotice(resp.StatusCode, wait, attempt+1, c.opts.MaxAttempts))
 		c.opts.Sleep(wait)
 	}
+}
+
+// retryNotice tells the user why khbb is waiting before attempt next of max.
+func retryNotice(status int, wait time.Duration, next, max int) string {
+	what := fmt.Sprintf("Bitbucket answered %d %s", status, http.StatusText(status))
+	if status == http.StatusTooManyRequests {
+		what = "Bitbucket is rate limiting requests (429 Too Many Requests)"
+	}
+	return fmt.Sprintf("%s; retrying in %s (attempt %d of %d)\n", what, wait, next, max)
 }
 
 func isMutating(method string) bool {

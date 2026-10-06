@@ -32,6 +32,10 @@ that installed it; after upgrading khbb, `khbb skill install --force` refreshes 
   `{"error":{"code":"not_found","status":404,"message":"...","hint":"..."}}`. `khbb api` also
   prints Bitbucket's JSON error body on stdout when a request fails, so a failed call can look
   like data.
+- **Keep stderr out of filters.** Do not pipe `2>&1` into `grep` or `head`: it hides khbb's notices
+  and errors. When Bitbucket rate-limits khbb, it says on stderr that it is waiting to retry; a
+  response that sends nothing for 60 seconds fails with a `network` error. If a command stays
+  silent for minutes anyway, rerun it with `KHBB_DEBUG=1` to see each request.
 - **Never merge, decline or stop without the human's explicit approval** of that specific action in
   this conversation, even though `--yes` exists. This covers `pr merge`, `pr decline` (a declined
   pull request cannot be reopened) and `pipeline stop`. Run the command with `--dry-run` first,
