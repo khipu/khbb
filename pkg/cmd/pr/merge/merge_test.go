@@ -193,7 +193,7 @@ func TestMerge_Timeout(t *testing.T) {
 	}
 
 	r := run(t, reg, nil, "--yes")
-	if r.err == nil || r.err.Error() != "the merge of pull request #42 is still running after 2m0s; check "+taskURL || len(r.slept) != 60 {
+	if r.err == nil || r.err.Error() != "the merge of pull request #42 is still running after 2m0s; it may still complete: check khbb pr view 42 --json state, or "+taskURL || len(r.slept) != 60 {
 		t.Errorf("err %v sleeps %d", r.err, len(r.slept))
 	}
 }

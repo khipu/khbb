@@ -206,7 +206,7 @@ func waitForMerge(ctx context.Context, client *bitbucket.Client, opts *MergeOpti
 			return pr, nil
 		}
 		if !opts.Now().Before(deadline) {
-			return nil, fmt.Errorf("the merge of pull request #%d is still running after %s; check %s", id, mergeTimeout, taskURL)
+			return nil, fmt.Errorf("the merge of pull request #%d is still running after %s; it may still complete: check khbb pr view %d --json state, or %s", id, mergeTimeout, id, taskURL)
 		}
 		opts.Sleep(pollInterval)
 	}
