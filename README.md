@@ -21,11 +21,14 @@ khbb pr merge --squash --delete-branch
 
 ## Install
 
-**Homebrew**
+**Homebrew (macOS and Linux)**
 
 ```bash
 brew install khipu/tap/khbb
 ```
+
+It installs shell completions for bash, zsh and fish too. An older Homebrew still installs khbb
+but without completions: run `brew update` first.
 
 **Scoop (Windows)**
 
@@ -42,8 +45,8 @@ go install github.com/khipu/khbb/cmd/khbb@latest
 
 **Binaries:** download an archive for macOS, Linux or Windows (amd64 or arm64) from the
 [releases page](https://github.com/khipu/khbb/releases) and check it against `checksums.txt`. The
-binaries are not signed: on macOS, run `xattr -d com.apple.quarantine khbb` once before the first
-run (Homebrew does this for you).
+macOS binaries are signed and notarized by Khipu (since v0.1.2), so they run straight after
+download.
 
 ## Log in
 
