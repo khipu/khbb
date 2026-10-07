@@ -1,0 +1,23 @@
+# Weekly dependency updates, one grouped pull request per ecosystem. The golangci-lint and
+# GoReleaser versions pinned inside the workflows (`version:` inputs) are not covered: bump them
+# by hand.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
