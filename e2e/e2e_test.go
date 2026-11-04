@@ -158,7 +158,7 @@ func TestPullRequestAndPipelineLifecycle(t *testing.T) {
 	repo := sandbox(t)
 	remote := os.Getenv("KHBB_E2E_REMOTE")
 	if remote == "" {
-		remote = "git@bitbucket.org:" + repo + ".git"
+		remote = "git@ssh.bitbucket.org:" + repo + ".git"
 	}
 	if err := checkSandbox("KHBB_E2E_REMOTE", remote); err != nil {
 		t.Fatal(err)

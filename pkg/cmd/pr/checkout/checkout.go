@@ -169,7 +169,7 @@ func cloneURL(cfg func() (*config.Config, error), repo gitctx.Repo) (string, err
 		protocol = c.GitProtocol
 	}
 	if protocol == "ssh" {
-		return "git@bitbucket.org:" + repo.FullName() + ".git", nil
+		return "git@ssh.bitbucket.org:" + repo.FullName() + ".git", nil
 	}
 	return "https://bitbucket.org/" + repo.FullName() + ".git", nil
 }
