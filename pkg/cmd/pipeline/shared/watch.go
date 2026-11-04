@@ -12,10 +12,6 @@ import (
 	"github.com/khipu/khbb/internal/iostreams"
 )
 
-// maxConsecutiveErrors is how many failed polls in a row Watch accepts: it gives up on the 5th
-// consecutive transient failure (spec §10).
-const maxConsecutiveErrors = 5
-
 const clearScreen = "\x1b[H\x1b[2J"
 
 // WatchOptions configures Watch.
@@ -26,26 +22,29 @@ type WatchOptions struct {
 	Number   int
 	Interval time.Duration
 	Sleep    func(time.Duration)
+	// Now reads the clock while transient errors are retried (default time.Now).
+	Now func() time.Time
 }
 
 // Watch polls pipeline o.Number until it completes or pauses on a manual step, and returns its last
 // state. On a terminal it redraws the summary on every poll; otherwise it prints one line per
-// pipeline or step status change. Transient errors (429, 5xx, network) are retried; others end it.
+// pipeline or step status change. Transient errors (429, 5xx, network) are retried, with a notice on
+// stderr, for up to cmdutil.PollOutage; others end it.
 func Watch(ctx context.Context, o WatchOptions) (Pipeline, []Step, error) {
 	live := o.IO.IsStdoutTTY()
 	seen := map[string]string{}
-	errorsInARow := 0
+	retry := cmdutil.PollRetry{Interval: o.Interval, Notices: o.IO.ErrOut, Now: o.Now}
 	for {
 		raw, steps, err := fetch(ctx, o)
 		if err != nil {
-			errorsInARow++
-			if !bitbucket.IsTransient(err) || errorsInARow >= maxConsecutiveErrors {
+			wait, err := retry.Failed(err)
+			if err != nil {
 				return Pipeline{}, nil, err
 			}
-			o.Sleep(o.Interval)
+			o.Sleep(wait)
 			continue
 		}
-		errorsInARow = 0
+		retry.Succeeded()
 		p := NewPipeline(raw, o.Repo)
 		done := raw.State.Name == "COMPLETED" || p.Status == StatusPaused
 		if live {

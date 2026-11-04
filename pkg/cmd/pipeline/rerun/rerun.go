@@ -43,7 +43,8 @@ so they cannot be copied: pass them again with --var and --secret-var. Without a
 the newest pipeline of the current branch.
 
 With --watch, khbb then follows the pipeline and exits with status 1 if it ends failed, error,
-stopped or expired (a pipeline paused on a manual step exits 0).`,
+stopped or expired (a pipeline paused on a manual step exits 0), or 3 if Bitbucket stops
+answering for 5 minutes.`,
 		Example: `  $ khbb pipeline rerun 42 --watch
   $ khbb pipeline rerun 45 --var ENV=staging --secret-var TOKEN="$TOKEN"`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),

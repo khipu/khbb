@@ -28,13 +28,13 @@ func run(t *testing.T, reg *httpmock.Registry, setup func(*cmdutil.Factory), arg
 	if setup != nil {
 		setup(f)
 	}
-	var slept []time.Duration
+	clock := &prtest.Clock{}
 	cmd := NewCmdWatch(f, func(o *WatchOptions) error {
-		o.Sleep = func(d time.Duration) { slept = append(slept, d) }
+		o.Sleep, o.Now = clock.Sleep, clock.Now
 		return watchRun(context.Background(), o)
 	})
 	err := prtest.Run(cmd, args...)
-	return result{out.String(), errOut.String(), slept, err}
+	return result{out.String(), errOut.String(), clock.Slept, err}
 }
 
 func finished(reg *httpmock.Registry, n int, state string) {
@@ -113,8 +113,36 @@ func TestWatch_HeadWaitRetriesTransientErrors(t *testing.T) {
 	if r.err != nil {
 		t.Fatal(r.err)
 	}
-	if !slices.Equal(r.slept, []time.Duration{5 * time.Second}) || !strings.HasSuffix(r.out, "#43 successful (1m02s)\n") {
-		t.Errorf("slept %v out %q", r.slept, r.out)
+	if !slices.Equal(r.slept, []time.Duration{5 * time.Second}) || !strings.HasSuffix(r.out, "#43 successful (1m02s)\n") ||
+		!strings.Contains(r.errOut, "Service unavailable (HTTP 503); retrying in 5s\n") {
+		t.Errorf("slept %v out %q stderr %q", r.slept, r.out, r.errOut)
+	}
+}
+
+func TestWatch_HeadWaitNeverConcludesFromAFailedPoll(t *testing.T) {
+	reg := httpmock.New(t)
+	for range 12 { // 0 s to 55 s
+		reg.Register("GET", ptest.Pipelines, httpmock.JSONResponse(200, prtest.Page()))
+	}
+	reg.Register("GET", ptest.Pipelines, prtest.NetworkFailure) // 60 s: the deadline, but no answer
+	reg.Register("GET", ptest.Pipelines, httpmock.JSONResponse(200, prtest.Page(ptest.Pipeline(43, ptest.StatePending))))
+	finished(reg, 43, ptest.StateSuccessful)
+
+	r := run(t, reg, headGit, "--exit-status")
+	if r.err != nil || !strings.HasSuffix(r.out, "#43 successful (1m02s)\n") {
+		t.Errorf("err %v out %q", r.err, r.out)
+	}
+}
+
+func TestWatch_HeadWaitGivesUpAfterFiveMinutesOfNetworkErrors(t *testing.T) {
+	reg := httpmock.New(t)
+	for range 13 {
+		reg.Register("GET", ptest.Pipelines, prtest.NetworkFailure)
+	}
+	r := run(t, reg, headGit, "--exit-status")
+	var netErr *bitbucket.NetworkError
+	if !errors.As(r.err, &netErr) || len(r.slept) != 12 || cmdutil.Classify(r.err).Exit != 3 {
+		t.Errorf("err %v slept %v", r.err, r.slept)
 	}
 }
 

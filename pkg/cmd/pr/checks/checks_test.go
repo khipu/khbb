@@ -33,13 +33,13 @@ func run(t *testing.T, reg *httpmock.Registry, tty bool, args ...string) (string
 	t.Helper()
 	f, ios, out, errOut := prtest.NewFactory(reg)
 	ios.SetStdoutTTY(tty)
-	var slept []time.Duration
+	clock := &prtest.Clock{}
 	cmd := NewCmdChecks(f, func(o *ChecksOptions) error {
-		o.Sleep = func(d time.Duration) { slept = append(slept, d) }
+		o.Sleep, o.Now = clock.Sleep, clock.Now
 		return checksRun(context.Background(), o)
 	})
 	err := prtest.Run(cmd, append([]string{"42"}, args...)...)
-	return out.String(), errOut.String(), slept, err
+	return out.String(), errOut.String(), clock.Slept, err
 }
 
 func exitCode(err error) int {
@@ -112,10 +112,19 @@ func TestChecks_FailFast(t *testing.T) {
 }
 
 func TestChecks_WatchRetriesTransientErrors(t *testing.T) {
-	reg := newReg(t, httpmock.StringResponse(503, "busy"), page(prtest.Status("build", "SUCCESSFUL")))
-	_, _, slept, err := run(t, reg, false, "--watch")
-	if err != nil || !slices.Equal(slept, []time.Duration{5 * time.Second}) {
-		t.Errorf("slept %v err %v", slept, err)
+	reg := newReg(t, prtest.NetworkFailure, page(prtest.Status("build", "SUCCESSFUL")))
+	_, errOut, slept, err := run(t, reg, false, "--watch")
+	if err != nil || !slices.Equal(slept, []time.Duration{5 * time.Second}) ||
+		!strings.HasPrefix(errOut, "network error: ") || !strings.HasSuffix(errOut, ": no such host; retrying in 5s\n") {
+		t.Errorf("slept %v err %v stderr %q", slept, err, errOut)
+	}
+}
+
+func TestChecks_WithoutWatchATransientErrorEndsIt(t *testing.T) {
+	reg := newReg(t, httpmock.StringResponse(503, "busy"))
+	_, errOut, slept, err := run(t, reg, false)
+	if cmdutil.Classify(err).Exit != 3 || len(slept) != 0 || errOut != "" {
+		t.Errorf("err %v slept %v stderr %q", err, slept, errOut)
 	}
 }
 
@@ -147,7 +156,7 @@ func TestNewCmdChecks_BadFlags(t *testing.T) {
 	}
 }
 
-func TestChecks_WatchSurvivesFourTransientErrors(t *testing.T) {
+func TestChecks_WatchBacksOffThroughTransientErrors(t *testing.T) {
 	reg := newReg(t,
 		httpmock.StringResponse(503, "busy"),
 		httpmock.StringResponse(503, "busy"),
@@ -156,22 +165,19 @@ func TestChecks_WatchSurvivesFourTransientErrors(t *testing.T) {
 		page(prtest.Status("build", "SUCCESSFUL")),
 	)
 	out, _, slept, err := run(t, reg, false, "--watch")
-	if err != nil || out != "build\tsuccessful\thttps://ci.example.com/build\n" || !slices.Equal(slept, []time.Duration{5 * time.Second, 5 * time.Second, 5 * time.Second, 5 * time.Second}) {
+	if err != nil || out != "build\tsuccessful\thttps://ci.example.com/build\n" || !slices.Equal(slept, []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second}) {
 		t.Errorf("out %q slept %v err %v", out, slept, err)
 	}
 }
 
-func TestChecks_WatchGivesUpOnFifthTransientError(t *testing.T) {
-	reg := newReg(t,
-		httpmock.StringResponse(503, "busy"),
-		httpmock.StringResponse(503, "busy"),
-		httpmock.StringResponse(503, "busy"),
-		httpmock.StringResponse(503, "busy"),
-		httpmock.StringResponse(503, "busy"),
-	)
-	_, _, slept, err := run(t, reg, false, "--watch")
+func TestChecks_WatchGivesUpAfterFiveMinutesOfTransientErrors(t *testing.T) {
+	responses := make([]httpmock.Responder, 13)
+	for i := range responses {
+		responses[i] = httpmock.StringResponse(503, "busy")
+	}
+	_, _, slept, err := run(t, newReg(t, responses...), false, "--watch")
 	var httpErr *bitbucket.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.StatusCode != 503 || !slices.Equal(slept, []time.Duration{5 * time.Second, 5 * time.Second, 5 * time.Second, 5 * time.Second}) {
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != 503 || len(slept) != 12 || cmdutil.Classify(err).Exit != 3 {
 		t.Errorf("err %v slept %v", err, slept)
 	}
 }

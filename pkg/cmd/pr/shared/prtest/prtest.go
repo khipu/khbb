@@ -7,9 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -208,4 +211,24 @@ func (g *FakeGit) Run(args ...string) (string, error) {
 // SetGit makes f run every git command through g.
 func SetGit(f *cmdutil.Factory, g *FakeGit) {
 	f.Git = &gitctx.Resolver{Git: g.Run}
+}
+
+// Clock is a fake clock for polling loops: Sleep records each wait and moves Now forward by it.
+type Clock struct {
+	T     time.Time
+	Slept []time.Duration
+}
+
+// Now returns the fake time.
+func (c *Clock) Now() time.Time { return c.T }
+
+// Sleep records d and advances the fake time by it.
+func (c *Clock) Sleep(d time.Duration) {
+	c.Slept = append(c.Slept, d)
+	c.T = c.T.Add(d)
+}
+
+// NetworkFailure fails the request as a DNS lookup that found no host.
+func NetworkFailure(*http.Request) (*http.Response, error) {
+	return nil, &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", Name: "api.bitbucket.org", IsNotFound: true}}
 }
