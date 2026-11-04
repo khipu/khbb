@@ -95,7 +95,7 @@ func (r *Resolver) RemoteFor(repo Repo) (string, error) {
 }
 
 // bitbucketRepo returns the repository a remote URL points at; ok is false for hosts other than
-// bitbucket.org and altssh.bitbucket.org, after resolving SSH host aliases.
+// bitbucket.org, ssh.bitbucket.org and altssh.bitbucket.org, after resolving SSH host aliases.
 func (r *Resolver) bitbucketRepo(rawURL string) (Repo, bool) {
 	host, repo, isSSH, err := parseRemoteURL(rawURL)
 	if err != nil {

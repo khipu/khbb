@@ -216,7 +216,9 @@ Repo resolution order:
 1. `-R/--repo workspace/repo` flag (available on `pr`, `pipeline` and `api`).
 2. `KHBB_REPO`.
 3. Git remotes of the current directory pointing at `bitbucket.org`:
-   - SSH `git@bitbucket.org:ws/repo.git`, `ssh://git@bitbucket.org/ws/repo.git`
+   - SSH `git@ssh.bitbucket.org:ws/repo.git`, `ssh://git@ssh.bitbucket.org/ws/repo.git`
+     (Bitbucket's SSH host; `bitbucket.org` refuses SSH after December 10, 2026 but is still
+     recognized), and `altssh.bitbucket.org` on port 443
    - HTTPS `https://[user@]bitbucket.org/ws/repo.git`
    - SSH host aliases are resolved with `ssh -G <host>` (as `gh` does).
    - If several Bitbucket remotes exist, prefer `origin`; otherwise the first in

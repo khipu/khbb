@@ -108,7 +108,7 @@ func TestCheckout_DivergedBranchSuggestsForce(t *testing.T) {
 }
 
 func TestCheckout_ForkFetchesByURL(t *testing.T) {
-	url := "git@bitbucket.org:dev/widgets-fork.git"
+	url := "git@ssh.bitbucket.org:dev/widgets-fork.git"
 	git := &prtest.FakeGit{
 		Outputs: map[string]string{
 			"remote -v": remotes,
