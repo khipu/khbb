@@ -19,14 +19,19 @@ import (
 )
 
 func watchOptions(reg *httpmock.Registry, tty bool) (shared.WatchOptions, *bytes.Buffer, *[]time.Duration) {
-	f, ios, out, _ := prtest.NewFactory(reg)
+	opts, out, _, clock := watchOptionsWithStderr(reg, tty)
+	return opts, out, &clock.Slept
+}
+
+func watchOptionsWithStderr(reg *httpmock.Registry, tty bool) (shared.WatchOptions, *bytes.Buffer, *bytes.Buffer, *prtest.Clock) {
+	f, ios, out, errOut := prtest.NewFactory(reg)
 	ios.SetStdoutTTY(tty)
 	client, _ := f.HTTPClient()
-	slept := &[]time.Duration{}
+	clock := &prtest.Clock{}
 	return shared.WatchOptions{
 		IO: ios, Client: client, Repo: gitctx.Repo{Workspace: "acme", Slug: "widgets"}, Number: 42,
-		Interval: 5 * time.Second, Sleep: func(d time.Duration) { *slept = append(*slept, d) },
-	}, out, slept
+		Interval: 5 * time.Second, Sleep: clock.Sleep, Now: clock.Now,
+	}, out, errOut, clock
 }
 
 func poll(reg *httpmock.Registry, state string, steps ...string) {
@@ -109,26 +114,38 @@ func TestWatch_TTYRedraws(t *testing.T) {
 
 func TestWatch_RetriesTransientErrors(t *testing.T) {
 	reg := httpmock.New(t)
+	poll(reg, ptest.StateRunning, ptest.Step("{s1}", "Build", ptest.StepInProgress))
+	reg.Register("GET", ptest.Pipelines+"/42", prtest.NetworkFailure)
 	reg.Register("GET", ptest.Pipelines+"/42", httpmock.JSONResponse(503, `{"type":"error","error":{"message":"Service unavailable"}}`))
 	poll(reg, ptest.StateSuccessful, ptest.Step("{s1}", "Build", ptest.StateSuccessful))
-	opts, _, slept := watchOptions(reg, false)
+	opts, out, errOut, clock := watchOptionsWithStderr(reg, false)
 
-	if p, _, err := shared.Watch(context.Background(), opts); err != nil || p.Status != "successful" || len(*slept) != 1 {
-		t.Errorf("p %+v err %v slept %v", p, err, *slept)
+	p, _, err := shared.Watch(context.Background(), opts)
+	if err != nil || p.Status != "successful" || !slices.Equal(clock.Slept, []time.Duration{5 * time.Second, 5 * time.Second, 10 * time.Second}) {
+		t.Fatalf("p %+v err %v slept %v", p, err, clock.Slept)
+	}
+	if !strings.HasSuffix(out.String(), "#42 successful (1m02s)\n") {
+		t.Errorf("out = %q", out.String())
+	}
+	wantErr := `network error: Get "https://api.bitbucket.org/2.0/repositories/acme/widgets/pipelines/42": dial tcp: lookup api.bitbucket.org: no such host; retrying in 5s
+Service unavailable (HTTP 503); retrying in 10s
+`
+	if errOut.String() != wantErr {
+		t.Errorf("errOut = %q, want %q", errOut.String(), wantErr)
 	}
 }
 
-func TestWatch_GivesUpAfterFiveTransientErrors(t *testing.T) {
+func TestWatch_GivesUpAfterFiveMinutesOfTransientErrors(t *testing.T) {
 	reg := httpmock.New(t)
-	for range 5 {
+	for range 13 { // waits of 5s, 10s, 20s and then 30s: the 13th failure comes 5m05s after the first
 		reg.Register("GET", ptest.Pipelines+"/42", httpmock.JSONResponse(502, `{"type":"error","error":{"message":"Bad gateway"}}`))
 	}
-	opts, _, slept := watchOptions(reg, false)
+	opts, _, _, clock := watchOptionsWithStderr(reg, false)
 
 	_, _, err := shared.Watch(context.Background(), opts)
 	var httpErr *bitbucket.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.StatusCode != 502 || len(*slept) != 4 {
-		t.Errorf("err %v slept %v", err, *slept)
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != 502 || len(clock.Slept) != 12 || cmdutil.Classify(err).Exit != 3 {
+		t.Errorf("err %v slept %v", err, clock.Slept)
 	}
 }
 

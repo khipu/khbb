@@ -53,6 +53,10 @@ type ConflictError struct{ Msg string }
 
 func (e *ConflictError) Error() string { return e.Msg }
 
+// ExitUnavailable is the exit status when Bitbucket gave no answer: a network failure, rate
+// limiting or a server error that outlasted the retries. The request may be worth repeating later.
+const ExitUnavailable = 3
+
 // ExitError ends the command with Code without printing anything.
 type ExitError struct{ Code int }
 
@@ -99,7 +103,7 @@ func Classify(err error) ErrorInfo {
 	case errors.As(err, &httpErr):
 		return classifyHTTP(httpErr)
 	case errors.As(err, &netErr):
-		return ErrorInfo{Code: "network", Message: err.Error(), Exit: 1}
+		return ErrorInfo{Code: "network", Message: err.Error(), Exit: ExitUnavailable}
 	}
 	return ErrorInfo{Code: "error", Message: err.Error(), Exit: 1}
 }
@@ -132,12 +136,12 @@ func classifyHTTP(e *bitbucket.HTTPError) ErrorInfo {
 	case e.StatusCode == 400 || e.StatusCode == 422:
 		info.Code = "validation"
 	case e.StatusCode == 429:
-		info.Code = "rate_limited"
+		info.Code, info.Exit = "rate_limited", ExitUnavailable
 	case e.StatusCode == 555:
-		info.Code = "server_error"
+		info.Code, info.Exit = "server_error", ExitUnavailable
 		info.Hint = "Bitbucket timed out; retry later"
 	case e.StatusCode >= 500:
-		info.Code = "server_error"
+		info.Code, info.Exit = "server_error", ExitUnavailable
 	default:
 		info.Code = "error"
 	}

@@ -59,6 +59,7 @@ that installed it; after upgrading khbb, `khbb skill install --force` refreshes 
 | 0 | Success, also after `--dry-run` | Use stdout. |
 | 1 | Error, including usage errors and `confirmation_required`. Also: `pr checks` found a failed check; `pipeline watch --exit-status` or `--watch` saw the pipeline end failed, error, stopped or expired | Read stderr. For a failed pipeline, read its logs. |
 | 2 | Cancelled at a prompt | Stop and ask the human. |
+| 3 | Bitbucket gave no answer: a network failure, rate limiting or a server error, after retries. `pipeline watch`, `--watch` and `pr checks --watch` first keep retrying for 5 minutes | Says nothing about the pull request or pipeline. Run the command again later; before repeating a change, check whether it was made. |
 | 4 | Not logged in, or the token is invalid | Ask the human to run `khbb auth login`. |
 | 8 | `pr checks`: some checks are still in progress | Wait with `khbb pr checks --watch`. |
 
@@ -99,12 +100,15 @@ khbb pipeline watch --exit-status
 
 Without a number, `pipeline watch` waits up to 60 seconds for the pipeline of your local HEAD
 commit to start, then follows it until it ends. Exit 0 means it succeeded or paused on a manual
-step; `khbb pipeline view --json status` tells which. Prefer it to `pr checks` right after a push:
-the new commit may have no checks reported yet, and `pr checks` exits 0 when none are reported.
-The command runs as long as the pipeline does, so give it a generous timeout.
+step; `khbb pipeline view --json status` tells which. Exit 3 means khbb lost contact with
+Bitbucket for 5 minutes, not that the pipeline failed: run the watch again. Prefer it to
+`pr checks` right after a push: the new commit may have no checks reported yet, and `pr checks`
+exits 0 when none are reported. The command runs as long as the pipeline does, so give it a
+generous timeout.
 
 To wait for every check on a pull request (pipelines and external builds), use
-`khbb pr checks --watch`: exit 0 when all passed, 1 when one failed.
+`khbb pr checks --watch`: exit 0 when all passed, 1 when one failed, 3 when Bitbucket stopped
+answering.
 
 ### Find out why a pipeline failed
 

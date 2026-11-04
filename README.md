@@ -142,6 +142,7 @@ completion: `khbb completion bash|zsh|fish|powershell` (Homebrew installs it for
 | 0 | Success |
 | 1 | Error, a failed check (`pr checks`) or a failed pipeline (`pipeline watch --exit-status`) |
 | 2 | Cancelled at a prompt |
+| 3 | Bitbucket did not answer: a network failure, rate limiting or a server error, after retries |
 | 4 | Not logged in, or the token was rejected |
 | 8 | Checks still in progress (`pr checks`) |
 

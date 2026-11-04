@@ -38,11 +38,14 @@ func TestClassify(t *testing.T) {
 		{"409", &bitbucket.HTTPError{StatusCode: 409}, "conflict", 1, 409, "", false},
 		{"400", &bitbucket.HTTPError{StatusCode: 400, Detail: "title is required"}, "validation", 1, 400, "title is required", false},
 		{"400 fields", &bitbucket.HTTPError{StatusCode: 400, Fields: map[string][]string{"title": {"too long"}, "source": {"branch not found"}}}, "validation", 1, 400, "source: branch not found; title: too long", false},
-		{"429", &bitbucket.HTTPError{StatusCode: 429}, "rate_limited", 1, 429, "", false},
-		{"555", &bitbucket.HTTPError{StatusCode: 555}, "server_error", 1, 555, "retry later", false},
+		{"429", &bitbucket.HTTPError{StatusCode: 429}, "rate_limited", 3, 429, "", false},
+		{"500", &bitbucket.HTTPError{StatusCode: 500}, "server_error", 3, 500, "", false},
+		{"503", &bitbucket.HTTPError{StatusCode: 503}, "server_error", 3, 503, "", false},
+		{"555", &bitbucket.HTTPError{StatusCode: 555}, "server_error", 3, 555, "retry later", false},
 		{"not found", &cmdutil.NotFoundError{Msg: `no open pull request found for branch "feature/widgets" in acme/widgets`}, "not_found", 1, 0, "", false},
 		{"conflict state", &cmdutil.ConflictError{Msg: "pull request #42 is merged; only open pull requests can be approved"}, "conflict", 1, 0, "", false},
-		{"network", &bitbucket.NetworkError{Err: errors.New("dial tcp: i/o timeout")}, "network", 1, 0, "", false},
+		{"network", &bitbucket.NetworkError{Err: errors.New("dial tcp: i/o timeout")}, "network", 3, 0, "", false},
+		{"stalled body", fmt.Errorf("decoding response of GET /x: %w", &bitbucket.NetworkError{Err: errors.New("no data for 1m0s")}), "network", 3, 0, "", false},
 		{"other", errors.New("boom"), "error", 1, 0, "", false},
 	}
 	for _, tc := range cases {

@@ -277,7 +277,7 @@ way. Without `[n]`, commands use the most recent pipeline for the current branch
 | `pipeline run` | `-b/--branch` (default current), `--commit <sha>`, `--tag <tag>`, `--custom <name>`, `--var KEY=VALUE` (repeatable), `--secret-var KEY=VALUE` (repeatable, secured), `--watch`, `--dry-run` | `POST /pipelines` with `target` + `selector`. `--branch`/`--commit`/`--tag` are mutually exclusive. |
 | `pipeline stop [n]` | `--yes`, `--dry-run` | `stopPipeline`. **Destructive** (§9). |
 | `pipeline rerun [n]` | `--secret-var KEY=VALUE`, `--watch`, `--dry-run` | Uses a native rerun endpoint if one exists (to verify); otherwise triggers a new pipeline with the same target, selector and non-secured variables. Secured variables cannot be read back: if the original had any, warn and require them via `--secret-var`. |
-| `pipeline watch [n]` | `-i/--interval` (default 5s), `--exit-status` | TTY: in-place refresh of step progress. Non-TTY: one line per state change. Stops when the pipeline is `successful`, `failed`, `error`, `stopped` or `paused` (waiting on a manual step — prints which step). With `--exit-status`: exit 1 on `failed`/`error`/`stopped`, else 0. |
+| `pipeline watch [n]` | `-i/--interval` (default 5s), `--exit-status` | TTY: in-place refresh of step progress. Non-TTY: one line per state change. Stops when the pipeline is `successful`, `failed`, `error`, `stopped` or `paused` (waiting on a manual step — prints which step). With `--exit-status`: exit 1 on `failed`/`error`/`stopped`, else 0; exit 3 if Bitbucket stops answering (§10). |
 
 **Status normalization.** Bitbucket splits pipeline/step status into `state`
 (PENDING, IN_PROGRESS, COMPLETED, …), `stage` and `result` (SUCCESSFUL, FAILED,
@@ -372,6 +372,7 @@ Timestamps are RFC 3339 UTC strings.
 | 0 | Success |
 | 1 | Error (including usage errors and `confirmation_required`) |
 | 2 | Cancelled by the user at a prompt |
+| 3 | Bitbucket gave no answer: `network`, `rate_limited` or `server_error`, after retries |
 | 4 | Authentication required or token invalid (401 / no credentials) |
 | 8 | Checks pending (`pr checks` only) |
 
@@ -401,13 +402,16 @@ Timestamps are RFC 3339 UTC strings.
 | 403 | exit 1, `forbidden`; hint names the scope the endpoint needs (static endpoint→scope table) |
 | 404 | exit 1, `not_found`; for repos, hint that private repos return 404 without access |
 | 409 / 400 on merge | exit 1; surface Bitbucket's merge-check reason verbatim |
-| 429 | GET: retry with exponential backoff honoring `Retry-After`, max 3 attempts; then `rate_limited` |
-| 502 / 503 / 504 | GET: same retry policy; mutating: no retry, `server_error` |
-| Network error / timeout | `network`; default per-request timeout 30s |
+| 429 | GET: retry with exponential backoff honoring `Retry-After`, max 3 attempts; then exit 3, `rate_limited` |
+| 502 / 503 / 504 | GET: same retry policy; mutating: no retry; exit 3, `server_error` (any 5xx) |
+| Network error / timeout | exit 3, `network`; default per-request timeout 30s |
 | Merge task timeout | exit 1 with the task status URL |
 
-`pipeline watch` and `pr checks --watch` treat transient errors (429, 5xx, network)
-as "keep polling" with backoff, up to 5 consecutive failures.
+`pipeline watch` (also `run --watch`, `rerun --watch`) and `pr checks --watch` treat
+transient errors (429, 5xx, network) as "keep polling": the wait doubles after each
+failure in a row (from the interval up to 30 s, or the interval if longer), each
+retry is announced on stderr, and they give up — exit 3 — once polls have been
+failing for 5 minutes. A failed poll never concludes "no pipeline started".
 
 ## 11. Testing
 

@@ -26,6 +26,7 @@ type ChecksOptions struct {
 	Branch     func() (string, error)
 	Exporter   cmdutil.Exporter
 	Sleep      func(time.Duration)
+	Now        func() time.Time // default time.Now
 
 	Selector string
 	Watch    bool
@@ -33,22 +34,19 @@ type ChecksOptions struct {
 	FailFast bool
 }
 
-// maxConsecutiveErrors is how many failed polls in a row --watch accepts: it gives up on the 5th
-// consecutive transient failure (after 4 retries).
-const maxConsecutiveErrors = 5
-
 const clearScreen = "\x1b[H\x1b[2J"
 
 // NewCmdChecks returns `khbb pr checks`.
 func NewCmdChecks(f *cmdutil.Factory, runF func(*ChecksOptions) error) *cobra.Command {
-	opts := &ChecksOptions{IO: f.IOStreams, HTTPClient: f.HTTPClient, BaseRepo: f.BaseRepo, Branch: f.Branch, Sleep: time.Sleep}
+	opts := &ChecksOptions{IO: f.IOStreams, HTTPClient: f.HTTPClient, BaseRepo: f.BaseRepo, Branch: f.Branch, Sleep: time.Sleep, Now: time.Now}
 	cmd := &cobra.Command{
 		Use:   "checks [<number> | <url>]",
 		Short: "Show the build statuses of a pull request",
 		Long: `Show the commit statuses (pipelines and external builds) reported on a pull request.
 
 Exit status: 0 when every check passed or none are reported, 1 when any check failed or was
-stopped, 8 when any check is still in progress.`,
+stopped, 8 when any check is still in progress, 3 when Bitbucket did not answer (with --watch,
+after 5 minutes of retries).`,
 		Example: `  $ khbb pr checks
   $ khbb pr checks 42 --watch --fail-fast
   $ khbb pr checks 42 --json name,state,url`,
@@ -93,18 +91,21 @@ func checksRun(ctx context.Context, opts *ChecksOptions) error {
 	}
 	interval := time.Duration(opts.Interval) * time.Second
 	live := opts.Watch && opts.IO.IsStdoutTTY() && opts.Exporter == nil
-	errorsInARow := 0
+	retry := cmdutil.PollRetry{Interval: interval, Notices: opts.IO.ErrOut, Now: opts.Now}
 	for {
 		statuses, err := client.ListPRStatuses(ctx, repo.Workspace, repo.Slug, pr.ID)
 		if err != nil {
-			errorsInARow++
-			if !opts.Watch || !bitbucket.IsTransient(err) || errorsInARow >= maxConsecutiveErrors {
+			if !opts.Watch {
 				return err
 			}
-			opts.Sleep(interval)
+			wait, err := retry.Failed(err)
+			if err != nil {
+				return err
+			}
+			opts.Sleep(wait)
 			continue
 		}
-		errorsInARow = 0
+		retry.Succeeded()
 		checks := make([]shared.Check, len(statuses))
 		for i := range statuses {
 			checks[i] = shared.NewCheck(&statuses[i])

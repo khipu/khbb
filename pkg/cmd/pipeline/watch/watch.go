@@ -19,10 +19,6 @@ import (
 // headWait is how long watch waits, after a push, for a pipeline of the local HEAD commit to start.
 const headWait = 60 * time.Second
 
-// maxConsecutiveErrors is how many failed lists in a row the HEAD-commit wait accepts: it gives up
-// on the 5th consecutive transient failure (spec §10).
-const maxConsecutiveErrors = 5
-
 // WatchOptions holds the inputs and dependencies of `khbb pipeline watch`.
 type WatchOptions struct {
 	IO         *iostreams.IOStreams
@@ -31,6 +27,7 @@ type WatchOptions struct {
 	Branch     func() (string, error)
 	Git        *gitctx.Resolver
 	Sleep      func(time.Duration)
+	Now        func() time.Time // default time.Now
 
 	Selector   string
 	Interval   int
@@ -39,7 +36,7 @@ type WatchOptions struct {
 
 // NewCmdWatch returns `khbb pipeline watch`.
 func NewCmdWatch(f *cmdutil.Factory, runF func(*WatchOptions) error) *cobra.Command {
-	opts := &WatchOptions{IO: f.IOStreams, HTTPClient: f.HTTPClient, BaseRepo: f.BaseRepo, Branch: f.Branch, Git: f.Git, Sleep: time.Sleep}
+	opts := &WatchOptions{IO: f.IOStreams, HTTPClient: f.HTTPClient, BaseRepo: f.BaseRepo, Branch: f.Branch, Git: f.Git, Sleep: time.Sleep, Now: time.Now}
 	cmd := &cobra.Command{
 		Use:   "watch [<number> | <url>]",
 		Short: "Watch a pipeline until it finishes",
@@ -49,7 +46,9 @@ redrawn every interval; otherwise one line is printed per pipeline or step statu
 Without an argument, watch the current branch's pipeline for your local HEAD commit, waiting up
 to 60 seconds for it to start after a push.
 
-With --exit-status, exit with status 1 when the pipeline ends failed, error, stopped or expired.`,
+With --exit-status, exit with status 1 when the pipeline ends failed, error, stopped or expired.
+Network errors and Bitbucket outages are retried, with a notice on stderr, for up to 5 minutes;
+then khbb exits with status 3, which says nothing about the pipeline.`,
 		Example: `  $ git push && khbb pipeline watch --exit-status
   $ khbb pipeline watch 42 --interval 10`,
 		Args: cmdutil.MaximumNArgs(1, "[<number> | <url>]"),
@@ -88,7 +87,7 @@ func watchRun(ctx context.Context, opts *WatchOptions) error {
 		return err
 	}
 	p, _, err := shared.Watch(ctx, shared.WatchOptions{
-		IO: opts.IO, Client: client, Repo: repo, Number: number, Interval: interval, Sleep: opts.Sleep,
+		IO: opts.IO, Client: client, Repo: repo, Number: number, Interval: interval, Sleep: opts.Sleep, Now: opts.Now,
 	})
 	if err != nil {
 		return err
@@ -131,31 +130,30 @@ func resolve(ctx context.Context, client *bitbucket.Client, opts *WatchOptions, 
 	if err != nil {
 		return 0, repo, err
 	}
-	errorsInARow := 0
-	for waited := time.Duration(0); ; waited += interval {
+	retry := cmdutil.PollRetry{Interval: interval, Notices: opts.IO.ErrOut, Now: opts.Now}
+	for waited := time.Duration(0); ; {
+		wait := interval
 		ps, err := client.ListPipelines(ctx, repo.Workspace, repo.Slug, bitbucket.PipelineListOptions{Branch: branch, CommitHash: head}, 1)
-		switch {
-		case err != nil && !bitbucket.IsTransient(err):
-			return 0, repo, err
-		case err != nil:
-			errorsInARow++
-			if errorsInARow >= maxConsecutiveErrors {
+		if err != nil {
+			if wait, err = retry.Failed(err); err != nil {
 				return 0, repo, err
 			}
-		default:
-			errorsInARow = 0
+		} else {
+			retry.Succeeded()
 			if len(ps) > 0 {
 				return ps[0].BuildNumber, repo, nil
 			}
-		}
-		if waited >= headWait {
-			return 0, repo, &cmdutil.NotFoundError{Msg: fmt.Sprintf("no pipeline started for commit %s on branch %q within %s; push it, or name a pipeline number",
-				shared.ShortHash(head), branch, headWait)}
+			// Only an answer shows that no pipeline started: a failed poll at the deadline is retried.
+			if waited >= headWait {
+				return 0, repo, &cmdutil.NotFoundError{Msg: fmt.Sprintf("no pipeline started for commit %s on branch %q within %s; push it, or name a pipeline number",
+					shared.ShortHash(head), branch, headWait)}
+			}
 		}
 		if waited == 0 {
 			fmt.Fprintf(opts.IO.ErrOut, "Waiting for a pipeline for commit %s on branch %s…\n", shared.ShortHash(head), branch)
 		}
-		opts.Sleep(interval)
+		opts.Sleep(wait)
+		waited += wait
 	}
 }
 
